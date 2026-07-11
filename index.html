@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>FitForge — AI Fitness Coach</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+
+html,body{margin:0; padding:0; background:#0D0F12; min-height:100%;}
+#ff-root{
+  --bg:#0D0F12; --surface:#17191D; --surface2:#1E2126; --surface3:#25282E;
+  --line:#2B2E34; --chalk:#F5F3EE; --steel:#9298A3; --steel-dim:#63676F;
+  --ember:#FF5B2E; --ember-dim:#7A2E19; --iron:#5E8FD1; --iron-dim:#233752;
+  --ok:#4CAF7D;
+  font-family:'Inter',sans-serif; color:var(--chalk); background:var(--bg);
+  max-width:460px; margin:0 auto; min-height:100vh; min-height:100dvh;
+  display:flex; flex-direction:column;
+}
+#ff-root *{box-sizing:border-box;}
+#ff-root .disp{font-family:'Bebas Neue',sans-serif; letter-spacing:0.5px;}
+#ff-root .mono{font-family:'JetBrains Mono',monospace;}
+#ff-root button{font-family:inherit; cursor:pointer;}
+#ff-root .scroll{flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch;}
+#ff-root .scroll::-webkit-scrollbar{width:6px;}
+#ff-root .scroll::-webkit-scrollbar-thumb{background:var(--line); border-radius:3px;}
+#ff-root .tag{display:inline-block; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:600; letter-spacing:0.3px;}
+#ff-root .card{background:var(--surface); border:1px solid var(--line); border-radius:12px;}
+#ff-root .btn{background:var(--surface2); border:1px solid var(--line); color:var(--chalk); border-radius:8px; padding:10px 14px; font-size:14px; font-weight:600; transition:background .15s;}
+#ff-root .btn:hover{background:var(--surface3);}
+#ff-root .btn-ember{background:var(--ember); border-color:var(--ember); color:#1A0A04;}
+#ff-root .btn-ember:hover{background:#ff6f47;}
+#ff-root .navbtn{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:9px 2px; background:none; border:none; color:var(--steel-dim); font-size:10px; font-weight:600;}
+#ff-root .navbtn.active{color:var(--ember);}
+#ff-root ::placeholder{color:var(--steel-dim);}
+#ff-root input,#ff-root textarea{background:var(--surface2); border:1px solid var(--line); color:var(--chalk); border-radius:8px; padding:9px 10px; font-size:14px; width:100%;}
+#ff-root .platebar{display:flex; gap:3px;}
+#ff-root .plate{width:6px; height:16px; background:var(--iron); border-radius:1px;}
+@keyframes ffPulse{0%{transform:scale(0.85); opacity:0.7;} 50%{transform:scale(1.15); opacity:1;} 100%{transform:scale(0.85); opacity:0.7;}}
+</style>
+<meta name="theme-color" content="#0D0F12">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FitForge">
+</head>
+<body>
+<div id="ff-root"></div>
+
+<script>
+(function(){
+var root = document.getElementById('ff-root');
+
+var DAYS = [
+  {id:'mon', label:'Monday', short:'MON', name:'Chest & Triceps', rest:false},
+  {id:'tue', label:'Tuesday', short:'TUE', name:'Back & Biceps', rest:false},
+  {id:'wed', label:'Wednesday', short:'WED', name:'Legs', rest:false},
+  {id:'thu', label:'Thursday', short:'THU', name:'Shoulders', rest:false},
+  {id:'fri', label:'Friday', short:'FRI', name:'Upper Body Strength', rest:false},
+  {id:'sat', label:'Saturday', short:'SAT', name:'Arms & Abs', rest:false},
+  {id:'sun', label:'Sunday', short:'SUN', name:'Rest & Recovery', rest:true}
+];
+
+var KB = {
+  bench_press:{primary:['chest'],secondary:['triceps','frontDelt'],equipment:'Barbell, flat bench',difficulty:'Intermediate',position:'Lie flat, feet planted, shoulder blades pinned to the bench, eyes under the bar.',steps:['Grip the bar slightly wider than shoulders.','Unrack and lower it to mid-chest with control.','Press up in a straight line until arms lock out.','Repeat for the prescribed reps.'],breathing:'Inhale on the way down, exhale forcefully as you press up.',mistakes:['Flaring elbows to 90°','Bouncing the bar off the chest','Lifting hips off the bench'],safety:['Use a spotter or safety pins at heavy loads','Keep wrists stacked over elbows']},
+  incline_press:{primary:['chest'],secondary:['frontDelt','triceps'],equipment:'Dumbbells, incline bench',difficulty:'Intermediate',position:'Bench at 30-45°, dumbbells at shoulder height, feet flat on the floor.',steps:['Press dumbbells up and slightly inward.','Lower with control to a chest-level stretch.','Keep the core braced throughout.'],breathing:'Exhale on the press, inhale on the descent.',mistakes:['Setting the incline past 45°','Letting the dumbbells drift out wide'],safety:['Control the weight on the way down','Don\u2019t overextend the elbows']},
+  chest_fly:{primary:['chest'],secondary:['frontDelt'],equipment:'Dumbbells or cable',difficulty:'Beginner',position:'Slight bend in the elbows, arms out wide at chest level.',steps:['Lower the arms out to the sides in a wide arc.','Squeeze the chest to bring hands back together above the chest.','Keep the elbow bend constant throughout.'],breathing:'Inhale on the stretch, exhale on the squeeze.',mistakes:['Bending the elbows too much (turns it into a press)','Using too much weight and losing form'],safety:['Don\u2019t let the arms drop below shoulder level under load']},
+  dips:{primary:['chest','triceps'],secondary:['frontDelt'],equipment:'Dip bars',difficulty:'Advanced',position:'Body upright to slight lean, arms locked at the top.',steps:['Lower the body until shoulders dip below elbows.','Press back up to full lockout.','Lean slightly forward to bias the chest.'],breathing:'Inhale down, exhale up.',mistakes:['Going too deep and straining the shoulders','Flaring the elbows excessively'],safety:['Stop the descent if you feel shoulder strain','Use an assisted-dip machine if needed']},
+  triceps_pushdown:{primary:['triceps'],secondary:[],equipment:'Cable machine',difficulty:'Beginner',position:'Standing, elbows pinned to the sides, slight forward lean.',steps:['Push the bar or rope down until arms fully extend.','Squeeze the triceps at the bottom.','Control the return to the start.'],breathing:'Exhale on the push down, inhale on the return.',mistakes:['Letting the elbows flare out or drift forward'],safety:['Keep the torso stable, don\u2019t lean into the weight']},
+  overhead_triceps_extension:{primary:['triceps'],secondary:[],equipment:'Dumbbell or EZ-bar',difficulty:'Intermediate',position:'Seated or standing, weight overhead, elbows pointed forward.',steps:['Lower the weight behind the head with control.','Extend the arms back to full lockout.','Keep the elbows fixed in place.'],breathing:'Inhale on the lower, exhale on the extend.',mistakes:['Letting the elbows flare wide','Arching the lower back'],safety:['Brace the core, use lighter weight until form is solid']},
+  deadlift:{primary:['hamstrings','glutes','lowerBack'],secondary:['lats','traps','forearm'],equipment:'Barbell',difficulty:'Advanced',position:'Feet hip-width, bar over mid-foot, flat back, chest up.',steps:['Grip the bar just outside the legs.','Drive through the floor, extending hips and knees together.','Lock out standing tall.','Lower the bar back down under control.'],breathing:'Big inhale and brace before the pull, exhale at lockout.',mistakes:['Rounding the lower back','Letting the bar drift away from the shins'],safety:['Keep the bar close to the body at all times','Use a weight you can fully control']},
+  pullups:{primary:['lats'],secondary:['biceps','rearDelt'],equipment:'Pull-up bar or lat pulldown machine',difficulty:'Intermediate',position:'Hang with arms extended, shoulder-width grip.',steps:['Pull the chest toward the bar, driving elbows down.','Squeeze the shoulder blades together at the top.','Lower with control to full extension.'],breathing:'Exhale as you pull up, inhale on the way down.',mistakes:['Using momentum or kipping','Not reaching full arm extension'],safety:['Use an assisted machine or band if full reps aren\u2019t possible yet']},
+  barbell_row:{primary:['lats','traps'],secondary:['biceps','rearDelt'],equipment:'Barbell',difficulty:'Intermediate',position:'Hinge at the hips around 45°, flat back, bar hanging below the shoulders.',steps:['Pull the bar toward the lower ribs.','Squeeze the shoulder blades at the top.','Lower with control.'],breathing:'Exhale on the pull, inhale on the lower.',mistakes:['Rounding the back','Using body momentum to heave the bar'],safety:['Keep a neutral spine, don\u2019t yank the weight']},
+  seated_cable_row:{primary:['lats','traps'],secondary:['biceps','rearDelt'],equipment:'Cable row machine',difficulty:'Beginner',position:'Seated, knees slightly bent, back straight.',steps:['Pull the handle to the abdomen.','Squeeze the shoulder blades together.','Extend the arms back out with control.'],breathing:'Exhale on the pull, inhale on the release.',mistakes:['Leaning too far back and using momentum'],safety:['Keep the chest up, avoid rounding the shoulders forward']},
+  barbell_curl:{primary:['biceps'],secondary:['forearm'],equipment:'Barbell',difficulty:'Beginner',position:'Standing, elbows pinned to the sides, shoulder-width grip.',steps:['Curl the bar up toward the chest.','Squeeze the biceps at the top.','Lower with control to full extension.'],breathing:'Exhale on the curl, inhale on the lower.',mistakes:['Swinging the torso for momentum','Letting the elbows drift forward'],safety:['Use a weight that allows strict form']},
+  hammer_curl:{primary:['biceps'],secondary:['forearm'],equipment:'Dumbbells',difficulty:'Beginner',position:'Standing, palms facing each other (neutral grip).',steps:['Curl the dumbbells up keeping the wrists neutral.','Squeeze at the top.','Lower with control.'],breathing:'Exhale on the curl, inhale on the lower.',mistakes:['Using shoulder swing instead of arm strength'],safety:['Keep the elbows tucked at the sides']},
+  squats:{primary:['quads','glutes'],secondary:['hamstrings','lowerBack'],equipment:'Barbell, squat rack',difficulty:'Intermediate',position:'Bar on the upper back, feet shoulder-width, toes slightly out.',steps:['Break at the hips and knees together.','Descend until the thighs are at least parallel.','Drive through the heels back to standing.'],breathing:'Inhale and brace at the top, exhale as you stand up.',mistakes:['Knees caving inward','Heels lifting off the floor'],safety:['Use safety bars in the rack, keep the chest up throughout']},
+  leg_press:{primary:['quads','glutes'],secondary:['hamstrings'],equipment:'Leg press machine',difficulty:'Beginner',position:'Feet shoulder-width on the platform, back flat against the pad.',steps:['Lower the platform until the knees reach about 90°.','Press back up without slamming the knees straight.','Control the tempo throughout.'],breathing:'Inhale on the lower, exhale on the press.',mistakes:['Letting the lower back round off the pad','Locking the knees hard at the top'],safety:['Don\u2019t lower past a comfortable range of motion']},
+  romanian_deadlift:{primary:['hamstrings','glutes'],secondary:['lowerBack'],equipment:'Barbell',difficulty:'Intermediate',position:'Slight knee bend, flat back, bar close to the thighs.',steps:['Hinge at the hips, pushing them back.','Lower the bar along the legs until a hamstring stretch is felt.','Drive the hips forward to stand back up.'],breathing:'Inhale on the way down, exhale on the way up.',mistakes:['Rounding the back','Bending the knees too much'],safety:['Keep the bar close to the legs throughout']},
+  walking_lunges:{primary:['quads','glutes'],secondary:['hamstrings'],equipment:'Dumbbells (optional)',difficulty:'Beginner',position:'Standing tall, core braced.',steps:['Step forward into a lunge, back knee toward the floor.','Push through the front heel into the next lunge.','Alternate legs continuously.'],breathing:'Inhale on the step down, exhale on the drive up.',mistakes:['Letting the front knee cave inward or shoot past the toes'],safety:['Take controlled steps, especially on uneven ground']},
+  leg_curl:{primary:['hamstrings'],secondary:[],equipment:'Leg curl machine',difficulty:'Beginner',position:'Lying or seated, pad against the lower legs.',steps:['Curl the pad toward the glutes.','Squeeze the hamstrings at the top.','Lower with control.'],breathing:'Exhale on the curl, inhale on the lower.',mistakes:['Using momentum by lifting the hips'],safety:['Keep the hips pressed down throughout']},
+  standing_calf_raises:{primary:['calves'],secondary:[],equipment:'Calf raise machine or dumbbells',difficulty:'Beginner',position:'Balls of the feet on a raised platform, heels hanging off.',steps:['Rise onto the toes as high as possible.','Pause and squeeze.','Lower the heels below the platform for a full stretch.'],breathing:'Exhale on the rise, inhale on the lower.',mistakes:['Using short, bouncy reps instead of a full range of motion'],safety:['Hold a rail for balance']},
+  overhead_press:{primary:['sideDelt','frontDelt'],secondary:['triceps','traps'],equipment:'Barbell',difficulty:'Intermediate',position:'Standing, bar at shoulder height, core braced.',steps:['Press the bar straight overhead.','Lock out with the bar over the mid-foot.','Lower back to the shoulders with control.'],breathing:'Inhale before pressing, exhale as the bar passes the head.',mistakes:['Arching the lower back excessively','Pressing the bar forward instead of straight up'],safety:['Brace the core hard, don\u2019t lean back to press']},
+  dumbbell_lateral_raise:{primary:['sideDelt'],secondary:[],equipment:'Dumbbells',difficulty:'Beginner',position:'Standing, slight elbow bend, dumbbells at the sides.',steps:['Raise the arms out to the sides to shoulder height.','Pause briefly at the top.','Lower with control.'],breathing:'Exhale on the raise, inhale on the lower.',mistakes:['Using momentum or swinging','Raising above shoulder height'],safety:['Use light weight, control the eccentric']},
+  rear_delt_fly:{primary:['rearDelt'],secondary:['traps'],equipment:'Dumbbells',difficulty:'Beginner',position:'Hinged forward at the hips, arms hanging with a slight elbow bend.',steps:['Raise the arms out to the sides, squeezing the shoulder blades.','Pause at the top.','Lower with control.'],breathing:'Exhale on the raise, inhale on the lower.',mistakes:['Standing too upright and turning it into a shrug'],safety:['Keep a soft knee bend, protect the lower back']},
+  front_raise:{primary:['frontDelt'],secondary:[],equipment:'Dumbbells',difficulty:'Beginner',position:'Standing, dumbbells in front of the thighs.',steps:['Raise the arms straight in front to shoulder height.','Pause briefly.','Lower with control.'],breathing:'Exhale on the raise, inhale on the lower.',mistakes:['Using body swing to lift the weight'],safety:['Avoid raising above shoulder height']},
+  shrugs:{primary:['traps'],secondary:[],equipment:'Barbell or dumbbells',difficulty:'Beginner',position:'Standing, weight held at the sides.',steps:['Elevate the shoulders straight up toward the ears.','Pause and squeeze at the top.','Lower with control.'],breathing:'Exhale on the shrug, inhale on the lower.',mistakes:['Rolling the shoulders instead of a straight up-down path'],safety:['Don\u2019t use momentum, keep it controlled']},
+  incline_dumbbell_curl:{primary:['biceps'],secondary:[],equipment:'Incline bench, dumbbells',difficulty:'Intermediate',position:'Seated on an incline bench, arms hanging straight down.',steps:['Curl the dumbbells up keeping the upper arm still.','Squeeze at the top.','Lower with a full stretch.'],breathing:'Exhale on the curl, inhale on the lower.',mistakes:['Letting the elbows drift forward'],safety:['Use a weight that allows a full stretch without shoulder strain']},
+  skull_crushers:{primary:['triceps'],secondary:[],equipment:'EZ-bar or dumbbells, flat bench',difficulty:'Intermediate',position:'Lying on a bench, bar held above the chest, elbows pointed at the ceiling.',steps:['Lower the bar toward the forehead by bending only the elbows.','Extend back to the start.','Keep the upper arms stationary.'],breathing:'Inhale on the lower, exhale on the extend.',mistakes:['Letting the elbows flare outward'],safety:['Use a spotter for heavier loads']},
+  rope_pushdown:{primary:['triceps'],secondary:[],equipment:'Cable machine, rope attachment',difficulty:'Beginner',position:'Standing, elbows pinned to the sides.',steps:['Push the rope down and apart at the bottom.','Squeeze the triceps.','Control the return.'],breathing:'Exhale on the push, inhale on the return.',mistakes:['Letting the elbows drift away from the body'],safety:['Keep the movement controlled, no jerking']},
+  hanging_leg_raise:{primary:['abs'],secondary:['obliques'],equipment:'Pull-up bar',difficulty:'Advanced',position:'Hanging from the bar, legs extended.',steps:['Raise the legs toward the chest using the abs.','Pause briefly at the top.','Lower with control, avoiding swing.'],breathing:'Exhale as the legs raise, inhale as they lower.',mistakes:['Swinging the body for momentum'],safety:['Use a hanging ab strap if grip is the limiting factor']},
+  cable_crunch:{primary:['abs'],secondary:[],equipment:'Cable machine, rope attachment',difficulty:'Beginner',position:'Kneeling below the cable, rope held behind the head.',steps:['Crunch down, bringing the elbows toward the knees.','Squeeze the abs at the bottom.','Return with control.'],breathing:'Exhale on the crunch, inhale on the return.',mistakes:['Using the hips or arms to pull instead of the abs'],safety:['Move through the spine, not the hips']},
+  plank:{primary:['abs'],secondary:['obliques','lowerBack'],equipment:'None',difficulty:'Beginner',position:'Forearms and toes on the floor, body in a straight line.',steps:['Brace the core and squeeze the glutes.','Hold a straight line from head to heels.','Breathe steadily throughout the hold.'],breathing:'Steady, controlled breaths \u2014 don\u2019t hold your breath.',mistakes:['Letting the hips sag or pike up'],safety:['Stop if lower back discomfort appears']}
+};
+
+var MUSCLE_LABEL = {chest:'Chest',frontDelt:'Front delts',sideDelt:'Side delts',rearDelt:'Rear delts',triceps:'Triceps',biceps:'Biceps',forearm:'Forearms',abs:'Abs',obliques:'Obliques',lats:'Lats',traps:'Traps',lowerBack:'Lower back',glutes:'Glutes',quads:'Quads',hamstrings:'Hamstrings',calves:'Calves'};
+
+var SCHEDULE = {
+  mon:[['bench_press','Barbell Bench Press','4 \u00d7 6\u20138'],['incline_press','Incline Dumbbell Press','3 \u00d7 8\u201310'],['chest_fly','Chest Fly','3 \u00d7 10\u201312'],['dips','Dips','3 sets'],['triceps_pushdown','Triceps Pushdown','3 \u00d7 12'],['overhead_triceps_extension','Overhead Triceps Extension','3 \u00d7 12']],
+  tue:[['deadlift','Deadlift','3 \u00d7 5'],['pullups','Pull-ups / Lat Pulldown','4 \u00d7 8\u201310'],['barbell_row','Barbell Row','4 \u00d7 8'],['seated_cable_row','Seated Cable Row','3 \u00d7 10'],['barbell_curl','Barbell Curl','3 \u00d7 10'],['hammer_curl','Hammer Curl','3 \u00d7 12']],
+  wed:[['squats','Squats','4 \u00d7 6\u20138'],['leg_press','Leg Press','3 \u00d7 10'],['romanian_deadlift','Romanian Deadlift','3 \u00d7 10'],['walking_lunges','Walking Lunges','3 \u00d7 12'],['leg_curl','Leg Curl','3 \u00d7 12'],['standing_calf_raises','Standing Calf Raises','4 \u00d7 15']],
+  thu:[['overhead_press','Overhead Press','4 \u00d7 6\u20138'],['dumbbell_lateral_raise','Dumbbell Lateral Raise','4 \u00d7 12'],['rear_delt_fly','Rear Delt Fly','3 \u00d7 15'],['front_raise','Front Raise','3 \u00d7 12'],['shrugs','Shrugs','4 \u00d7 12']],
+  fri:[['bench_press','Bench Press','3 \u00d7 5'],['pullups','Pull-ups','3 sets'],['incline_press','Incline Press','3 \u00d7 8'],['barbell_row','Row','3 \u00d7 8'],['overhead_press','Shoulder Press','3 \u00d7 10'],['barbell_curl','Barbell Curl','3 \u00d7 10'],['triceps_pushdown','Triceps Pushdown','3 \u00d7 10']],
+  sat:[['barbell_curl','Barbell Curl','4 \u00d7 10'],['incline_dumbbell_curl','Incline Dumbbell Curl','3 \u00d7 12'],['skull_crushers','Skull Crushers','4 \u00d7 10'],['rope_pushdown','Rope Pushdown','3 \u00d7 12'],['hanging_leg_raise','Hanging Leg Raise','3 \u00d7 15'],['cable_crunch','Cable Crunch','3 \u00d7 15'],['plank','Plank','3 \u00d7 1 minute']],
+  sun:[]
+};
+
+var MOTIVATION = {
+  before:['{muscle} is on the menu today. Show up and put in the work.','No warm-up needed for your mindset \u2014 that\u2019s already locked in. Time for {day}.','Today\u2019s {day} session builds on every rep before it. Get after it.','Discipline over mood. Walk in and start your {muscle} work.','Your only job today: better than last {day}. Let\u2019s go.'],
+  during:['One more rep. That\u2019s where progress lives.','Form first, ego second. Keep the tension on the {muscle}.','Halfway through \u2014 don\u2019t let the last sets get sloppy.','This set is the one that counts. Stay locked in.'],
+  after:['Session logged. {muscle} worked, day won.','Another {day} in the books. Consistency is the whole game.','That\u2019s a rep bank deposit. It compounds.','Done for today. Recovery starts now \u2014 let the work sink in.'],
+  missed:['One missed session doesn\u2019t erase the ones before it. Back on the plan today.','No guilt, just the next set. Get back to it.','Streaks reset, habits don\u2019t. Show up today.']
+};
+
+var state = {tab:'dashboard', dayId:null, exId:null, muscleView:'front', coachLog:[], installDismissed:false};
+var deferredInstallPrompt = null;
+
+function todayId(){
+  var idx = new Date().getDay();
+  return ['sun','mon','tue','wed','thu','fri','sat'][idx];
+}
+function dayById(id){ for(var i=0;i<DAYS.length;i++) if(DAYS[i].id===id) return DAYS[i]; }
+
+async function sget(key,fallback){
+  try{ var v = localStorage.getItem(key); return v!==null? JSON.parse(v): fallback; }
+  catch(e){ return fallback; }
+}
+async function sset(key,val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+
+var DB = {completed:{}, prs:[], bodylog:[], usedMsg:{before:[],during:[],after:[],missed:[]}};
+
+async function loadDB(){
+  DB.completed = await sget('ff:completed', {});
+  DB.prs = await sget('ff:prs', []);
+  DB.bodylog = await sget('ff:bodylog', []);
+  DB.usedMsg = await sget('ff:usedmsg', {before:[],during:[],after:[],missed:[]});
+}
+async function saveCompleted(){ await sset('ff:completed', DB.completed); }
+async function savePrs(){ await sset('ff:prs', DB.prs); }
+async function saveBodylog(){ await sset('ff:bodylog', DB.bodylog); }
+async function saveUsedMsg(){ await sset('ff:usedmsg', DB.usedMsg); }
+
+function pickMessage(phase, dayLabel, muscle){
+  var pool = MOTIVATION[phase];
+  var used = DB.usedMsg[phase] || [];
+  if(used.length >= pool.length) used = [];
+  var avail = [];
+  for(var i=0;i<pool.length;i++) if(used.indexOf(i)===-1) avail.push(i);
+  var pick = avail[Math.floor(Math.random()*avail.length)];
+  used.push(pick);
+  DB.usedMsg[phase] = used;
+  saveUsedMsg();
+  return pool[pick].replace('{day}', dayLabel).replace('{muscle}', muscle);
+}
+
+function dateKey(d){ return d.toISOString().slice(0,10); }
+
+function computeStreak(){
+  var streak = 0;
+  var d = new Date();
+  while(true){
+    var k = dateKey(d);
+    var wd = d.getDay();
+    var id = ['sun','mon','tue','wed','thu','fri','sat'][wd];
+    if(id==='sun'){ d.setDate(d.getDate()-1); continue; }
+    if(DB.completed[k]){ streak++; d.setDate(d.getDate()-1); }
+    else break;
+  }
+  return streak;
+}
+
+function esc(s){ return (s+'').replace(/[&<>"]/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+function plateBar(n){
+  var h='<div class="platebar">';
+  for(var i=0;i<Math.min(n,6);i++) h+='<div class="plate"></div>';
+  h+='</div>';
+  return h;
+}
+
+function parseSetCount(scheme){
+  var m = scheme.match(/^(\d+)/);
+  return m? parseInt(m[1]) : 3;
+}
+
+function render(){
+  var h = '';
+  h += renderHeader();
+  h += '<div class="scroll" style="padding:16px;">';
+  if(state.tab==='dashboard') h += renderDashboard();
+  else if(state.tab==='week') h += renderWeek();
+  else if(state.tab==='day') h += renderDay();
+  else if(state.tab==='exercise') h += renderExercise();
+  else if(state.tab==='library') h += renderLibrary();
+  else if(state.tab==='progress') h += renderProgress();
+  else if(state.tab==='coach') h += renderCoach();
+  h += '</div>';
+  h += renderNav();
+  root.innerHTML = h;
+  attachHandlers();
+}
+
+function renderHeader(){
+  return '<div style="padding:14px 16px 10px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between;">'+
+    '<div class="disp" style="font-size:22px; color:var(--chalk);">FIT<span style="color:var(--ember);">FORGE</span></div>'+
+    '<div class="mono" style="font-size:12px; color:var(--steel);">'+new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})+'</div>'+
+    '</div>';
+}
+
+function renderNav(){
+  var tabs = [['dashboard','ti-flame','Today'],['week','ti-calendar','Week'],['library','ti-search','Library'],['progress','ti-chart-bar','Progress'],['coach','ti-message-circle','Coach']];
+  var h = '<div style="display:flex; border-top:1px solid var(--line); background:var(--surface);">';
+  tabs.forEach(function(t){
+    h += '<button class="navbtn'+(state.tab===t[0]?' active':'')+'" data-act="tab" data-tab="'+t[0]+'"><i class="ti '+t[1]+'" style="font-size:18px;"></i>'+t[2]+'</button>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function isStandaloneMode(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function isIOSDevice(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+function renderInstallBanner(){
+  if(isStandaloneMode() || state.installDismissed) return '';
+  var h = '<div class="card" style="padding:12px; margin-bottom:14px; display:flex; gap:10px; align-items:center;">';
+  h += '<div style="width:36px; height:36px; border-radius:9px; background:var(--ember-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px; color:var(--ember);">\u2913</div>';
+  h += '<div style="flex:1;">';
+  h += '<div style="font-size:13px; font-weight:600;">Install FitForge</div>';
+  if(isIOSDevice()){
+    h += '<div style="font-size:12px; color:var(--steel); margin-top:2px;">Tap Share, then "Add to Home Screen".</div>';
+  } else {
+    h += '<div style="font-size:12px; color:var(--steel); margin-top:2px;">Add it to your home screen for a full-screen app.</div>';
+  }
+  h += '</div>';
+  if(!isIOSDevice()) h += '<button class="btn btn-ember" style="padding:7px 12px; font-size:12px; flex-shrink:0;" data-act="install-app">Install</button>';
+  h += '<button class="btn" style="padding:7px 10px; font-size:12px; flex-shrink:0;" data-act="dismiss-install" aria-label="Dismiss">\u2715</button>';
+  h += '</div>';
+  return h;
+}
+
+function renderDashboard(){
+  var id = todayId();
+  var day = dayById(id);
+  var streak = computeStreak();
+  var doneToday = !!DB.completed[dateKey(new Date())];
+  var h = '';
+  h += renderInstallBanner();
+  h += '<div class="card" style="padding:16px; margin-bottom:14px;">';
+  h += '<div style="color:var(--steel); font-size:12px; letter-spacing:0.5px; text-transform:uppercase;">'+day.label+'</div>';
+  h += '<div class="disp" style="font-size:30px; margin:2px 0 8px;">'+esc(day.name)+'</div>';
+  if(!day.rest){
+    var muscles = uniqueMusclesForDay(id);
+    h += '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">';
+    muscles.forEach(function(m){ h += '<span class="tag" style="background:var(--iron-dim); color:#BFD4F2;">'+MUSCLE_LABEL[m]+'</span>'; });
+    h += '</div>';
+  }
+  var phase = doneToday? 'after' : 'before';
+  var muscleWord = day.rest? 'recovery' : (uniqueMusclesForDay(id)[0]? MUSCLE_LABEL[uniqueMusclesForDay(id)[0]].toLowerCase() : 'training');
+  var msg = day.rest? 'Recovery is where growth happens. Rest today, return stronger tomorrow.' : pickMessage(phase, day.label, muscleWord);
+  h += '<div style="background:var(--surface2); border-radius:8px; padding:10px 12px; font-size:14px; color:var(--chalk); line-height:1.5; margin-bottom:14px;">'+esc(msg)+'</div>';
+  if(!day.rest){
+    h += '<button class="btn btn-ember" style="width:100%;" data-act="open-day" data-day="'+id+'">View today\u2019s workout \u2192</button>';
+    h += '<button class="btn" style="width:100%; margin-top:8px;" data-act="toggle-complete">'+(doneToday? '\u2713 Marked complete \u2014 undo' : 'Mark today complete')+'</button>';
+  } else {
+    h += '<button class="btn" style="width:100%;" data-act="tab" data-tab="progress">View recovery tips \u2192</button>';
+  }
+  h += '</div>';
+
+  h += '<div style="display:flex; gap:10px; margin-bottom:14px;">';
+  h += '<div class="card" style="flex:1; padding:12px; text-align:center;"><div class="disp" style="font-size:26px; color:var(--ember);">'+streak+'</div><div style="font-size:11px; color:var(--steel);">day streak</div></div>';
+  h += '<div class="card" style="flex:1; padding:12px; text-align:center;"><div class="disp" style="font-size:26px;">'+Object.keys(DB.completed).length+'</div><div style="font-size:11px; color:var(--steel);">total sessions</div></div>';
+  h += '<div class="card" style="flex:1; padding:12px; text-align:center;"><div class="disp" style="font-size:26px;">'+DB.prs.length+'</div><div style="font-size:11px; color:var(--steel);">PRs logged</div></div>';
+  h += '</div>';
+
+  h += '<div style="font-size:13px; color:var(--steel); margin-bottom:8px;">This week</div>';
+  h += '<div style="display:flex; gap:6px;">';
+  DAYS.forEach(function(d){
+    var done = weekDone(d.id);
+    h += '<div style="flex:1; text-align:center;">';
+    h += '<div style="font-size:10px; color:var(--steel-dim); margin-bottom:4px;">'+d.short+'</div>';
+    h += '<div style="height:28px; border-radius:6px; background:'+(done?'var(--ok)':(d.rest?'var(--surface3)':'var(--surface2)'))+'; border:1px solid var(--line);"></div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function weekDone(dayId){
+  var now = new Date();
+  var dow = now.getDay();
+  var target = ['sun','mon','tue','wed','thu','fri','sat'].indexOf(dayId);
+  var diff = target - dow;
+  var d = new Date(now); d.setDate(now.getDate()+diff);
+  return !!DB.completed[dateKey(d)];
+}
+
+function uniqueMusclesForDay(dayId){
+  var set=[], seen={};
+  (SCHEDULE[dayId]||[]).forEach(function(ex){
+    KB[ex[0]].primary.forEach(function(m){ if(!seen[m]){seen[m]=1; set.push(m);} });
+  });
+  return set;
+}
+
+function renderWeek(){
+  var h = '<div class="disp" style="font-size:20px; margin-bottom:12px;">6-day schedule</div>';
+  DAYS.forEach(function(d){
+    var done = weekDone(d.id);
+    h += '<div class="card" style="padding:14px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between;" data-act="'+(d.rest?'':'open-day')+'" data-day="'+d.id+'">';
+    h += '<div>';
+    h += '<div style="font-size:11px; color:var(--steel); text-transform:uppercase; letter-spacing:0.4px;">'+d.label+'</div>';
+    h += '<div class="disp" style="font-size:20px;">'+esc(d.name)+'</div>';
+    if(!d.rest) h += '<div style="font-size:12px; color:var(--steel);">'+SCHEDULE[d.id].length+' exercises</div>';
+    h += '</div>';
+    if(d.rest) h += '<i class="ti ti-moon" style="font-size:20px; color:var(--iron);"></i>';
+    else h += '<i class="ti '+(done?'ti-circle-check':'ti-chevron-right')+'" style="font-size:20px; color:'+(done?'var(--ok)':'var(--steel-dim)')+';"></i>';
+    h += '</div>';
+  });
+  return h;
+}
+
+function renderDay(){
+  var day = dayById(state.dayId);
+  if(!day) return '<div>Day not found.</div>';
+  var h = '<button class="btn" style="margin-bottom:12px;" data-act="tab" data-tab="week"><i class="ti ti-arrow-left"></i> Week</button>';
+  h += '<div style="font-size:12px; color:var(--steel); text-transform:uppercase;">'+day.label+'</div>';
+  h += '<div class="disp" style="font-size:26px; margin-bottom:14px;">'+esc(day.name)+'</div>';
+  SCHEDULE[day.id].forEach(function(ex, i){
+    var kb = KB[ex[0]];
+    h += '<div class="card" style="padding:14px; margin-bottom:10px;" data-act="open-ex" data-ex="'+ex[0]+'" data-name="'+esc(ex[1])+'" data-scheme="'+esc(ex[2])+'" data-day="'+day.id+'">';
+    h += '<div style="display:flex; justify-content:space-between; align-items:flex-start;">';
+    h += '<div><div style="font-size:16px; font-weight:600;">'+esc(ex[1])+'</div>';
+    h += '<div class="mono" style="font-size:13px; color:var(--ember); margin-top:2px;">'+esc(ex[2])+'</div></div>';
+    h += '<i class="ti ti-chevron-right" style="font-size:18px; color:var(--steel-dim);"></i>';
+    h += '</div>';
+    h += '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">';
+    kb.primary.forEach(function(m){ h += '<span class="tag" style="background:var(--ember-dim); color:#FFC9B4;">'+MUSCLE_LABEL[m]+'</span>'; });
+    h += '</div>';
+    h += '</div>';
+  });
+  return h;
+}
+
+function renderExercise(){
+  var ex = state.exId;
+  var kb = KB[ex.id];
+  var h = '<button class="btn" style="margin-bottom:12px;" data-act="open-day" data-day="'+ex.day+'"><i class="ti ti-arrow-left"></i> Back</button>';
+  h += '<div class="disp" style="font-size:26px;">'+esc(ex.name)+'</div>';
+  h += '<div class="mono" style="font-size:15px; color:var(--ember); margin-bottom:12px;">'+esc(ex.scheme)+'</div>';
+
+  h += renderMuscleDiagram(kb);
+
+  h += sectionBlock('Starting position', kb.position);
+  h += sectionListBlock('Execution', kb.steps, true);
+  h += sectionBlock('Breathing', kb.breathing);
+  h += sectionListBlock('Common mistakes', kb.mistakes, false);
+  h += sectionListBlock('Safety tips', kb.safety, false);
+  h += sectionBlock('Recommended rest', restForScheme(ex.scheme, kb));
+
+  h += '<div style="display:flex; gap:8px; margin:14px 0;">';
+  h += '<div class="card" style="flex:1; padding:10px; text-align:center;"><div style="font-size:11px; color:var(--steel);">Equipment</div><div style="font-size:13px; margin-top:2px;">'+esc(kb.equipment)+'</div></div>';
+  h += '<div class="card" style="flex:1; padding:10px; text-align:center;"><div style="font-size:11px; color:var(--steel);">Difficulty</div><div style="font-size:13px; margin-top:2px;">'+esc(kb.difficulty)+'</div></div>';
+  h += '</div>';
+
+  h += '<div class="card" style="padding:14px; margin-top:14px;">';
+  h += '<div style="font-size:13px; color:var(--steel); margin-bottom:8px;">Log this set</div>';
+  h += '<div style="display:flex; gap:8px;">';
+  h += '<input id="ff-pr-weight" type="number" placeholder="Weight used" style="flex:1;">';
+  h += '<button class="btn btn-ember" data-act="log-pr" data-name="'+esc(ex.name)+'">Save PR</button>';
+  h += '</div></div>';
+  return h;
+}
+
+function restForScheme(scheme, kb){
+  if(kb.primary.indexOf('quads')>-1 || kb.primary.indexOf('hamstrings')>-1 && kb.primary.indexOf('glutes')>-1) return '2\u20133 min for heavy compound sets, 60\u201390 sec for accessory work.';
+  var heavy = ['deadlift','squats','bench_press','overhead_press'];
+  return heavy.indexOf(Object.keys(KB).find(function(k){return KB[k]===kb;}))>-1 ? '2\u20133 minutes between sets.' : '60\u201390 seconds between sets.';
+}
+
+function sectionBlock(title, text){
+  return '<div style="margin-bottom:14px;"><div style="font-size:13px; color:var(--steel); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.4px;">'+title+'</div><div style="font-size:14px; line-height:1.5;">'+esc(text)+'</div></div>';
+}
+function sectionListBlock(title, items, numbered){
+  var h = '<div style="margin-bottom:14px;"><div style="font-size:13px; color:var(--steel); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.4px;">'+title+'</div>';
+  items.forEach(function(it,i){
+    h += '<div style="font-size:14px; line-height:1.5; margin-bottom:4px; display:flex; gap:8px;"><span style="color:var(--ember); font-weight:600; flex-shrink:0;">'+(numbered?(i+1)+'.':'\u2013')+'</span><span>'+esc(it)+'</span></div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+var REGIONS_FRONT = {
+  chest:{x:60,y:70,w:80,h:34}, frontDelt:{x:38,y:62,w:20,h:24}, sideDeltF:{x:142,y:62,w:20,h:24},
+  biceps:{x:32,y:92,w:16,h:34}, bicepsR:{x:152,y:92,w:16,h:34},
+  forearm:{x:28,y:130,w:16,h:34}, forearmR:{x:156,y:130,w:16,h:34},
+  abs:{x:70,y:108,w:60,h:44}, quads:{x:64,y:200,w:34,h:60}, quadsR:{x:102,y:200,w:34,h:60},
+  calves:{x:68,y:270,w:26,h:44}, calvesR:{x:106,y:270,w:26,h:44}
+};
+var REGIONS_BACK = {
+  traps:{x:68,y:56,w:64,h:24}, rearDelt:{x:40,y:64,w:20,h:22}, rearDeltR:{x:140,y:64,w:20,h:22},
+  triceps:{x:32,y:92,w:16,h:34}, tricepsR:{x:152,y:92,w:16,h:34},
+  lats:{x:60,y:92,w:80,h:40}, lowerBack:{x:74,y:134,w:52,h:24},
+  glutes:{x:66,y:160,w:68,h:32}, hamstrings:{x:64,y:200,w:34,h:60}, hamstringsR:{x:102,y:200,w:34,h:60},
+  calves:{x:68,y:270,w:26,h:44}, calvesR:{x:106,y:270,w:26,h:44}
+};
+var REGION_MUSCLE = {
+  chest:'chest', frontDelt:'frontDelt', sideDeltF:'sideDelt', biceps:'biceps', bicepsR:'biceps',
+  forearm:'forearm', forearmR:'forearm', abs:'abs', quads:'quads', quadsR:'quads', calves:'calves', calvesR:'calves',
+  traps:'traps', rearDelt:'rearDelt', rearDeltR:'rearDelt', triceps:'triceps', tricepsR:'triceps',
+  lats:'lats', lowerBack:'lowerBack', glutes:'glutes', hamstrings:'hamstrings', hamstringsR:'hamstrings'
+};
+
+function bodySvg(view, kb){
+  var regions = view==='front'? REGIONS_FRONT : REGIONS_BACK;
+  var s = '<svg viewBox="0 0 200 330" style="width:100%; height:220px;" role="img"><title>'+(view==='front'?'Front':'Back')+' muscle diagram</title>';
+  s += '<ellipse cx="100" cy="30" rx="18" ry="20" fill="var(--surface3)"/>';
+  s += '<rect x="70" y="50" width="60" height="110" rx="14" fill="var(--surface3)"/>';
+  s += '<rect x="30" y="58" width="18" height="80" rx="8" fill="var(--surface3)"/>';
+  s += '<rect x="152" y="58" width="18" height="80" rx="8" fill="var(--surface3)"/>';
+  s += '<rect x="64" y="160" width="34" height="130" rx="12" fill="var(--surface3)"/>';
+  s += '<rect x="102" y="160" width="34" height="130" rx="12" fill="var(--surface3)"/>';
+  Object.keys(regions).forEach(function(key){
+    var m = REGION_MUSCLE[key];
+    var r = regions[key];
+    var fill = 'var(--surface2)';
+    if(kb.primary.indexOf(m)>-1) fill = 'var(--ember)';
+    else if(kb.secondary.indexOf(m)>-1) fill = 'var(--iron)';
+    s += '<rect x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.h+'" rx="6" fill="'+fill+'" opacity="0.92"/>';
+  });
+  s += '</svg>';
+  return s;
+}
+
+function renderMuscleDiagram(kb){
+  var h = '<div class="card" style="padding:14px;">';
+  h += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">';
+  h += '<div style="font-size:13px; color:var(--steel); text-transform:uppercase; letter-spacing:0.4px;">Muscle activation</div>';
+  h += '<div style="display:flex; gap:4px;">';
+  h += '<button class="btn" style="padding:5px 10px; font-size:12px;'+(state.muscleView==='front'?' border-color:var(--ember); color:var(--ember);':'')+'" data-act="muscle-view" data-view="front">Front</button>';
+  h += '<button class="btn" style="padding:5px 10px; font-size:12px;'+(state.muscleView==='back'?' border-color:var(--ember); color:var(--ember);':'')+'" data-act="muscle-view" data-view="back">Back</button>';
+  h += '</div></div>';
+  h += bodySvg(state.muscleView, kb);
+  h += '<div style="display:flex; gap:14px; margin-top:8px; font-size:12px; color:var(--steel);">';
+  h += '<span><span style="display:inline-block; width:10px; height:10px; background:var(--ember); border-radius:2px; margin-right:5px;"></span>Primary: '+kb.primary.map(function(m){return MUSCLE_LABEL[m];}).join(', ')+'</span>';
+  h += '</div>';
+  if(kb.secondary.length) h += '<div style="font-size:12px; color:var(--steel); margin-top:4px;"><span style="display:inline-block; width:10px; height:10px; background:var(--iron); border-radius:2px; margin-right:5px;"></span>Secondary: '+kb.secondary.map(function(m){return MUSCLE_LABEL[m];}).join(', ')+'</div>';
+  h += '</div>';
+  return h;
+}
+
+function renderLibrary(){
+  var h = '<div class="disp" style="font-size:20px; margin-bottom:10px;">Exercise library</div>';
+  h += '<input id="ff-search" placeholder="Search exercises" style="margin-bottom:12px;" value="'+esc(state.query||'')+'">';
+  var q = (state.query||'').toLowerCase();
+  var entries = [];
+  Object.keys(SCHEDULE).forEach(function(dayId){
+    SCHEDULE[dayId].forEach(function(ex){ entries.push({id:ex[0], name:ex[1], scheme:ex[2], day:dayId}); });
+  });
+  var seen = {};
+  entries = entries.filter(function(e){ if(seen[e.name]) return false; seen[e.name]=1; return true; });
+  entries = entries.filter(function(e){ return !q || e.name.toLowerCase().indexOf(q)>-1; });
+  entries.forEach(function(e){
+    var kb = KB[e.id];
+    h += '<div class="card" style="padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;" data-act="open-ex" data-ex="'+e.id+'" data-name="'+esc(e.name)+'" data-scheme="'+esc(e.scheme)+'" data-day="'+e.day+'">';
+    h += '<div><div style="font-size:15px; font-weight:600;">'+esc(e.name)+'</div><div style="font-size:12px; color:var(--steel);">'+kb.primary.map(function(m){return MUSCLE_LABEL[m];}).join(', ')+'</div></div>';
+    h += '<i class="ti ti-chevron-right" style="color:var(--steel-dim);"></i></div>';
+  });
+  if(!entries.length) h += '<div style="color:var(--steel); font-size:14px;">No exercises match that search.</div>';
+  return h;
+}
+
+function renderProgress(){
+  var streak = computeStreak();
+  var h = '<div class="disp" style="font-size:20px; margin-bottom:12px;">Progress</div>';
+  h += '<div style="display:flex; gap:10px; margin-bottom:14px;">';
+  h += '<div class="card" style="flex:1; padding:14px; text-align:center;"><div class="disp" style="font-size:28px; color:var(--ember);">'+streak+'</div><div style="font-size:11px; color:var(--steel);">current streak</div></div>';
+  h += '<div class="card" style="flex:1; padding:14px; text-align:center;"><div class="disp" style="font-size:28px;">'+Object.keys(DB.completed).length+'</div><div style="font-size:11px; color:var(--steel);">sessions logged</div></div>';
+  h += '</div>';
+
+  h += '<div class="card" style="padding:14px; margin-bottom:14px;">';
+  h += '<div style="font-size:13px; color:var(--steel); margin-bottom:8px;">Log body weight</div>';
+  h += '<div style="display:flex; gap:8px;"><input id="ff-bw" type="number" placeholder="Weight (kg)" style="flex:1;"><button class="btn btn-ember" data-act="log-bw">Save</button></div>';
+  h += '</div>';
+
+  if(DB.bodylog.length){
+    h += '<div style="font-size:13px; color:var(--steel); margin-bottom:6px;">Weight history</div>';
+    DB.bodylog.slice().reverse().slice(0,6).forEach(function(b){
+      h += '<div style="display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid var(--line);"><span style="color:var(--steel);">'+b.date+'</span><span class="mono">'+b.weight+' kg</span></div>';
+    });
+  }
+
+  h += '<div style="font-size:13px; color:var(--steel); margin:14px 0 6px;">Personal records</div>';
+  if(!DB.prs.length) h += '<div style="color:var(--steel-dim); font-size:13px;">No PRs logged yet. Save one from any exercise page.</div>';
+  DB.prs.slice().reverse().slice(0,8).forEach(function(p){
+    h += '<div style="display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid var(--line);"><span>'+esc(p.name)+'</span><span class="mono" style="color:var(--ember);">'+esc(p.weight)+'</span></div>';
+  });
+
+  h += '<div style="font-size:13px; color:var(--steel); margin:14px 0 6px;">Recovery basics</div>';
+  h += '<div class="card" style="padding:12px; font-size:13px; line-height:1.6; color:var(--chalk);">Aim for 7\u20139 hours of sleep, stay hydrated, and do 10 minutes of light stretching on rest days. Prioritize protein at each meal to support the muscle you trained this week.</div>';
+  return h;
+}
+
+function renderCoach(){
+  var h = '<div class="disp" style="font-size:20px; margin-bottom:10px;">AI coach</div>';
+  h += '<div class="card" style="padding:12px; min-height:120px; margin-bottom:10px;">';
+  if(!state.coachLog.length){
+    h += '<div style="color:var(--steel); font-size:14px;">Ask me about today\u2019s workout, form, or your progress.</div>';
+  }
+  state.coachLog.forEach(function(m){
+    h += '<div style="margin-bottom:10px; display:flex; justify-content:'+(m.from==='user'?'flex-end':'flex-start')+';">';
+    h += '<div style="max-width:80%; padding:8px 12px; border-radius:10px; font-size:14px; line-height:1.4; background:'+(m.from==='user'?'var(--ember-dim)':'var(--surface2)')+'; color:'+(m.from==='user'?'#FFD9C7':'var(--chalk)')+';">'+esc(m.text)+'</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  h += '<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">';
+  ['What\'s my workout today?','How am I doing?','Form tip','Missed a day'].forEach(function(q){
+    h += '<button class="btn" style="padding:6px 10px; font-size:12px;" data-act="coach-chip" data-q="'+esc(q)+'">'+q+'</button>';
+  });
+  h += '</div>';
+  h += '<div style="display:flex; gap:8px;"><input id="ff-coach-input" placeholder="Ask your coach" style="flex:1;"><button class="btn btn-ember" data-act="coach-send">Send</button></div>';
+  return h;
+}
+
+function coachReply(q){
+  var lower = q.toLowerCase();
+  var id = todayId();
+  var day = dayById(id);
+  if(lower.indexOf('today')>-1 || lower.indexOf('workout')>-1){
+    if(day.rest) return 'Today is rest day. Focus on sleep, hydration, and light stretching \u2014 growth happens during recovery.';
+    var list = SCHEDULE[id].map(function(e){return e[1];}).join(', ');
+    return day.label+' is '+day.name+': '+list+'. Open the Week tab for full sets and reps.';
+  }
+  if(lower.indexOf('how am i') > -1 || lower.indexOf('doing')>-1 || lower.indexOf('progress')>-1){
+    var streak = computeStreak();
+    return streak>0 ? ('You\u2019re on a '+streak+'-day streak. Keep the intensity up and don\u2019t skip your rest day.') : 'No active streak right now \u2014 today\u2019s a good day to start one.';
+  }
+  if(lower.indexOf('missed')>-1){
+    return 'One missed session doesn\u2019t define your progress. Pick up today\u2019s workout and keep moving \u2014 consistency over perfection.';
+  }
+  if(lower.indexOf('form')>-1 || lower.indexOf('tip')>-1){
+    return 'Biggest general form rule: control the eccentric (lowering) phase on every lift. Speed comes from strength, not the other way around. Open any exercise page for a full technique breakdown.';
+  }
+  return 'I can help with today\u2019s workout, your progress, form cues, or getting back on track after a missed day \u2014 ask away.';
+}
+
+function attachHandlers(){
+  var els = root.querySelectorAll('[data-act]');
+  els.forEach(function(el){
+    el.addEventListener('click', function(){
+      var act = el.getAttribute('data-act');
+      if(act==='tab'){ state.tab = el.getAttribute('data-tab'); render(); }
+      else if(act==='open-day'){ state.dayId = el.getAttribute('data-day'); state.tab='day'; render(); }
+      else if(act==='open-ex'){
+        state.exId = {id:el.getAttribute('data-ex'), name:el.getAttribute('data-name'), scheme:el.getAttribute('data-scheme'), day:el.getAttribute('data-day')};
+        state.tab='exercise'; state.muscleView='front'; render();
+      }
+      else if(act==='muscle-view'){ state.muscleView = el.getAttribute('data-view'); render(); }
+      else if(act==='toggle-complete'){
+        var k = dateKey(new Date());
+        if(DB.completed[k]) delete DB.completed[k]; else DB.completed[k]=true;
+        saveCompleted(); render();
+      }
+      else if(act==='log-pr'){
+        var w = root.querySelector('#ff-pr-weight').value;
+        if(w){ DB.prs.push({name:el.getAttribute('data-name'), weight:w, date:dateKey(new Date())}); savePrs(); render(); }
+      }
+      else if(act==='log-bw'){
+        var w2 = root.querySelector('#ff-bw').value;
+        if(w2){ DB.bodylog.push({weight:w2, date:dateKey(new Date())}); saveBodylog(); render(); }
+      }
+      else if(act==='coach-chip'){
+        var q = el.getAttribute('data-q');
+        state.coachLog.push({from:'user', text:q});
+        state.coachLog.push({from:'coach', text:coachReply(q)});
+        render();
+      }
+      else if(act==='coach-send'){
+        var inp = root.querySelector('#ff-coach-input');
+        var val = inp.value.trim();
+        if(val){ state.coachLog.push({from:'user', text:val}); state.coachLog.push({from:'coach', text:coachReply(val)}); render(); }
+      }
+      else if(act==='install-app'){
+        if(deferredInstallPrompt){
+          deferredInstallPrompt.prompt();
+          deferredInstallPrompt.userChoice.then(function(){ deferredInstallPrompt = null; });
+        }
+      }
+      else if(act==='dismiss-install'){ state.installDismissed = true; render(); }
+    });
+  });
+  var search = root.querySelector('#ff-search');
+  if(search){
+    search.addEventListener('input', function(){ state.query = search.value; render(); setTimeout(function(){ var s2 = root.querySelector('#ff-search'); if(s2){ s2.focus(); s2.selectionStart = s2.selectionEnd = s2.value.length; } },0); });
+  }
+  var coachInput = root.querySelector('#ff-coach-input');
+  if(coachInput){
+    coachInput.addEventListener('keydown', function(e){ if(e.key==='Enter'){ root.querySelector('[data-act="coach-send"]').click(); } });
+  }
+}
+
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  render();
+});
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('service-worker.js').catch(function(){});
+  });
+}
+
+(async function init(){
+  root.innerHTML = '<div style="padding:40px; text-align:center; color:var(--steel);">Loading\u2026</div>';
+  await loadDB();
+  render();
+})();
+})();
+</script>
+</body>
+</html>
