@@ -183,7 +183,7 @@
         uni[nm + q] = { value: v };
       }
     });
-    var mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88, metalness: 0.0, envMapIntensity: 0.55 });
+    var mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88, metalness: 0.0, envMapIntensity: 0.4 });
     mat.onBeforeCompile = function (sh) {
       for (var k in uni) sh.uniforms[k] = uni[k];
       sh.vertexShader = sh.vertexShader
@@ -191,8 +191,8 @@
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvM0 = aM0; vM1 = aM1; vM2 = aM2; vM3 = aM3; vBind = position;\nvP = clamp(dot(aM0,uP0)+dot(aM1,uP1)+dot(aM2,uP2)+dot(aM3,uP3), 0.0, 1.0);\nvS = clamp(dot(aM0,uS0)+dot(aM1,uS1)+dot(aM2,uS2)+dot(aM3,uS3), 0.0, 1.0);\ntransformed += normalize(normal) * (vP * uPA * 0.008);');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nuniform float uPA; uniform float uSA;\nvarying vec4 vM0; varying vec4 vM1; varying vec4 vM2; varying vec4 vM3; varying float vP; varying float vS; varying vec3 vBind;\nfloat ffEdge(vec4 m){ vec4 e = 1.0 - smoothstep(0.0, 0.2, abs(m - 0.5)); return max(max(e.x, e.y), max(e.z, e.w)); }')
-        .replace('#include <color_fragment>', '#include <color_fragment>\n{ float ed = max(max(ffEdge(vM0), ffEdge(vM1)), max(ffEdge(vM2), ffEdge(vM3)));\n  vec3 clay = vec3(0.56, 0.565, 0.575) * (1.0 - 0.22 * ed);\n  float shT = 1.0 - smoothstep(0.062, 0.082, vBind.y); float shB = smoothstep(-0.292, -0.262, vBind.y); float shX = 1.0 - smoothstep(0.20, 0.24, abs(vBind.x));\n  float shorts = shT * shB * shX;\n  vec3 pc = mix(clay, vec3(0.075, 0.08, 0.09), shorts);\n  pc = mix(pc, vec3(1.0, 0.05, 0.04) * (1.0 - 0.15 * ed), clamp(vP * 0.88, 0.0, 1.0));\n  pc = mix(pc, vec3(0.04, 0.38, 1.0) * (1.0 - 0.15 * ed), clamp(vS * 0.8, 0.0, 1.0) * (1.0 - vP));\n  diffuseColor.rgb = pc; }')
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nfloat ffFr = pow(1.0 - clamp(abs(dot(normalize(vNormal), normalize(vViewPosition))), 0.0, 1.0), 2.2);\ntotalEmissiveRadiance += vec3(1.0, 0.03, 0.02) * vP * uPA * 1.1 + vec3(0.04, 0.30, 1.0) * vS * uSA * 0.55 + (vec3(1.0, 0.12, 0.06) * vP * uPA + vec3(0.1, 0.4, 1.0) * vS * uSA) * ffFr * 0.55;');
+        .replace('#include <color_fragment>', '#include <color_fragment>\n{ float ed = max(max(ffEdge(vM0), ffEdge(vM1)), max(ffEdge(vM2), ffEdge(vM3)));\n  vec3 clay = vec3(0.44, 0.445, 0.455) * (1.0 - 0.07 * ed);\n  float shT = 1.0 - smoothstep(0.062, 0.082, vBind.y); float shB = smoothstep(-0.292, -0.262, vBind.y); float shX = 1.0 - smoothstep(0.20, 0.24, abs(vBind.x));\n  float shorts = shT * shB * shX;\n  vec3 pc = mix(clay, vec3(0.075, 0.08, 0.09), shorts);\n  float fib = 0.5 + 0.5 * sin(vBind.x * 170.0 + vBind.y * 60.0 + sin(vBind.z * 90.0) * 1.5);\n  pc = mix(pc, vec3(1.0, 0.16, 0.05) * (0.72 + 0.28 * fib), clamp(vP * 0.9, 0.0, 1.0));\n  pc = mix(pc, vec3(0.06, 0.40, 1.0) * (0.78 + 0.22 * fib), clamp(vS * 0.8, 0.0, 1.0) * (1.0 - vP));\n  diffuseColor.rgb = pc; }')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nfloat ffFr = pow(1.0 - clamp(abs(dot(normalize(vNormal), normalize(vViewPosition))), 0.0, 1.0), 2.2);\nfloat ffOut = max(1.0 - smoothstep(0.0, 0.16, abs(vP - 0.5)), 1.0 - smoothstep(0.0, 0.16, abs(vS - 0.5))) * step(0.02, vP + vS);\ntotalEmissiveRadiance += vec3(0.62, 0.8, 1.0) * ffOut * 0.9 + vec3(0.45, 0.62, 1.0) * pow(ffFr, 1.6) * 0.32;\ntotalEmissiveRadiance += vec3(1.0, 0.03, 0.02) * vP * uPA * 1.1 + vec3(0.04, 0.30, 1.0) * vS * uSA * 0.55 + (vec3(1.0, 0.12, 0.06) * vP * uPA + vec3(0.1, 0.4, 1.0) * vS * uSA) * ffFr * 0.55;');
     };
     mat.customProgramCacheKey = function () { return 'ffbody-v2'; };
     ch.bodyU = uni;
@@ -364,6 +364,7 @@
   def('plank', { scene: 'none', prop: { type: 'none' }, A: PL_A, B: PL_A, peak: 'both', still: true, cam: { t: [0, 0.4, -0.1], d: 3.9 }, phases: ['Hold the line', 'Hold the line'] });
 
   ['bench_press', 'incline_press', 'chest_fly', 'skull_crushers', 'leg_press', 'incline_dumbbell_curl'].forEach(function (k) { MOTIONS[k].head = 1; });
+  MOTIONS.bench_press.rack = true;
   MOTIONS.leg_curl.head = 0.35; MOTIONS.plank.head = 0.45; MOTIONS.cable_crunch.head = 0.8;
 
   /* ---------- scene helpers ---------- */
@@ -380,6 +381,41 @@
     m.position.copy(a).add(b).multiplyScalar(0.5); m.scale.y = Math.max(0.001, len);
     m.quaternion.setFromUnitVectors(new V3(0, 1, 0), d.normalize());
   }
+
+  function roundPad(w, h, d, r, color, x, y, z, parent) {
+    var rr = Math.min(r, w / 2 - 0.002, d / 2 - 0.002), sh = new THREE.Shape();
+    sh.moveTo(-w / 2 + rr, -d / 2); sh.lineTo(w / 2 - rr, -d / 2); sh.quadraticCurveTo(w / 2, -d / 2, w / 2, -d / 2 + rr);
+    sh.lineTo(w / 2, d / 2 - rr); sh.quadraticCurveTo(w / 2, d / 2, w / 2 - rr, d / 2); sh.lineTo(-w / 2 + rr, d / 2);
+    sh.quadraticCurveTo(-w / 2, d / 2, -w / 2, d / 2 - rr); sh.lineTo(-w / 2, -d / 2 + rr); sh.quadraticCurveTo(-w / 2, -d / 2, -w / 2 + rr, -d / 2);
+    var b = Math.min(0.02, h / 3), depth = h - 2 * b;
+    var geo = new THREE.ExtrudeGeometry(sh, { depth: depth, bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 4, curveSegments: 8 });
+    geo.rotateX(-PI / 2); geo.translate(0, -depth / 2, 0);
+    var m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color, roughness: 0.48, metalness: 0.05 }));
+    m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+  }
+  var HOLE_TEX = null;
+  function holeTex() {
+    if (HOLE_TEX) return HOLE_TEX;
+    var cv = document.createElement('canvas'); cv.width = 64; cv.height = 128; var g = cv.getContext('2d');
+    g.fillStyle = '#2b2f36'; g.fillRect(0, 0, 64, 128); g.fillStyle = '#0d0f12';
+    [32, 96].forEach(function (y) { g.beginPath(); g.arc(32, y, 9, 0, PI * 2); g.fill(); });
+    HOLE_TEX = new THREE.CanvasTexture(cv); HOLE_TEX.wrapS = HOLE_TEX.wrapT = THREE.RepeatWrapping; HOLE_TEX.repeat.set(1, 16);
+    return HOLE_TEX;
+  }
+  function powerRack(g) {
+    var steel = COL.steel;
+    [-1, 1].forEach(function (sx) {
+      var up = new THREE.Mesh(new THREE.BoxGeometry(0.07, 2.1, 0.07), new THREE.MeshStandardMaterial({ map: holeTex(), roughness: 0.45, metalness: 0.7 }));
+      up.position.set(sx * 0.64, 1.05, -0.95); up.castShadow = true; g.add(up);
+      box(0.09, 0.05, 1.3, 0x20242a, sx * 0.64, 0.025, -0.45, g, true);
+      box(0.1, 0.045, 0.12, 0x20242a, sx * 0.64, 1.08, -0.86, g, true);      // J-hook base
+      box(0.1, 0.07, 0.035, 0x20242a, sx * 0.64, 1.115, -0.80, g, true);     // hook lip
+      box(0.05, 0.04, 0.55, 0x20242a, sx * 0.64, 0.62, -0.68, g, true);      // safety arm
+    });
+    box(1.35, 0.07, 0.07, 0x20242a, 0, 2.1, -0.95, g, true);
+    box(1.35, 0.06, 0.06, 0x20242a, 0, 0.9, -0.95, g, true);
+  }
+
   function pelvisFrame(pose) {
     var g = new THREE.Group(); g.position.set(pose.pelvis[0], pose.pelvis[1], pose.pelvis[2]); g.rotation.set(pose.rootPitch, 0, 0); return g;
   }
@@ -389,9 +425,14 @@
     var s = motion.scene;
     var A = motion.A;
     if (s === 'bench') {
-      box(0.32, 0.08, 1.15, COL.pad, 0, 0.42, -0.20, g);
-      box(0.05, 0.38, 0.05, COL.steel, 0, 0.19, -0.62, g, true); box(0.05, 0.38, 0.05, COL.steel, 0, 0.19, 0.22, g, true);
-      box(0.5, 0.04, 0.05, COL.steel, 0, 0.02, -0.62, g, true); box(0.5, 0.04, 0.05, COL.steel, 0, 0.02, 0.22, g, true);
+      roundPad(0.34, 0.09, 1.2, 0.05, 0x0f1114, 0, 0.415, -0.20, g);
+      box(0.07, 0.07, 1.05, 0x1c2026, 0, 0.30, -0.20, g, true);
+      [-0.62, 0.28].forEach(function (z) {
+        box(0.07, 0.3, 0.07, 0x1c2026, 0, 0.17, z, g, true);
+        box(0.62, 0.05, 0.08, 0x1c2026, 0, 0.025, z, g, true);
+        [-0.29, 0.29].forEach(function (x) { box(0.07, 0.028, 0.1, 0x0a0b0d, x, 0.014, z, g); });
+      });
+      if (motion.rack) powerRack(g);
     } else if (s === 'incline') {
       var f = pelvisFrame(A);
       box(0.32, 0.95, 0.07, COL.pad, 0, 0.30, -0.15, f);
@@ -444,7 +485,33 @@
   }
 
   /* ---------- props (follow the hands / feet) ---------- */
+  var PLATE_GEO = {};
+  function plateGeo(R) {
+    var key = R.toFixed(3); if (PLATE_GEO[key]) return PLATE_GEO[key];
+    var T = 0.0225, k = R / 0.225, pts = [];
+    var half = [[0.0265, T], [0.052, T], [0.052, T - 0.004], [0.088 * k, T - 0.004], [0.088 * k, T], [0.100 * k, T], [0.100 * k, T - 0.005], [0.195 * k, T - 0.005], [0.195 * k, T], [R - 0.012, T], [R, T - 0.008]];
+    half.forEach(function (p) { pts.push(new THREE.Vector2(p[0], p[1])); });
+    for (var i = half.length - 1; i >= 0; i--) pts.push(new THREE.Vector2(half[i][0], -half[i][1]));
+    var g = new THREE.LatheGeometry(pts, 48); g.userData.shared = true; PLATE_GEO[key] = g; return g;
+  }
   function makeBarbell(len, plateR, plateX, plates) {
+    var grp = new THREE.Group();
+    var chrome = new THREE.MeshStandardMaterial({ color: 0xc7ccd4, roughness: 0.28, metalness: 0.95 });
+    var bar = new THREE.Mesh(new THREE.CylinderGeometry(0.0125, 0.0125, len, 20), chrome); bar.rotation.z = PI / 2; bar.castShadow = true; grp.add(bar);
+    var knurl = new THREE.MeshStandardMaterial({ color: 0x8c9199, roughness: 0.55, metalness: 0.85 });
+    [-0.3, 0.3].forEach(function (x) { var kn = new THREE.Mesh(new THREE.CylinderGeometry(0.0136, 0.0136, 0.42, 20), knurl); kn.rotation.z = PI / 2; kn.position.x = x; grp.add(kn); });
+    var plateMat = new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.55, metalness: 0.15 });
+    [-1, 1].forEach(function (sx) {
+      for (var i = 0; i < plates; i++) {
+        var pm = plateMat.clone(); var p = new THREE.Mesh(plateGeo(plateR - i * 0.025), pm);
+        p.userData.fade = true; p.castShadow = true; p.receiveShadow = true; p.rotation.z = PI / 2; p.position.x = sx * (plateX + i * 0.047); grp.add(p);
+      }
+      var sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.0225, 0.0225, 0.2, 20), chrome); sleeve.rotation.z = PI / 2; sleeve.position.x = sx * (plateX + plates * 0.047 - 0.01); grp.add(sleeve);
+      var col = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.045, 20), new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.4, metalness: 0.8 })); col.rotation.z = PI / 2; col.position.x = sx * (plateX + plates * 0.047 + 0.03); grp.add(col);
+    });
+    return grp;
+  }
+  function makeBarbellOld(len, plateR, plateX, plates) {
     var grp = new THREE.Group();
     var bar = cyl(0.0125, len, COL.steel, grp, true); bar.rotation.z = PI / 2;
     [-1, 1].forEach(function (sx) {
@@ -564,7 +631,7 @@
     var fcv = document.createElement('canvas'); fcv.width = fcv.height = 256;
     var fg = fcv.getContext('2d'), fgr = fg.createRadialGradient(128, 128, 20, 128, 128, 128);
     fgr.addColorStop(0, '#fff'); fgr.addColorStop(0.55, '#bbb'); fgr.addColorStop(1, '#000'); fg.fillStyle = fgr; fg.fillRect(0, 0, 256, 256);
-    var floor = new THREE.Mesh(new THREE.CircleGeometry(4.6, 64), new THREE.MeshStandardMaterial({ color: 0x23272e, roughness: 0.95, envMapIntensity: 0.25, transparent: true, alphaMap: new THREE.CanvasTexture(fcv) }));
+    var floor = new THREE.Mesh(new THREE.CircleGeometry(4.6, 64), new THREE.MeshStandardMaterial({ color: 0x1d242c, roughness: 0.95, envMapIntensity: 0.25, transparent: true, alphaMap: new THREE.CanvasTexture(fcv) }));
     floor.rotation.x = -PI / 2; floor.receiveShadow = true; scene.add(floor);
     var ring = new THREE.Mesh(new THREE.RingGeometry(2.15, 2.2, 64), new THREE.MeshBasicMaterial({ color: COL.ring, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
     ring.visible = false;

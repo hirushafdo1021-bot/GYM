@@ -1,4 +1,4 @@
-var CACHE_NAME = 'fitforge-v4';
+var CACHE_NAME = 'fitforge-v5';
 var ASSETS = [
   './',
   './index.html',
