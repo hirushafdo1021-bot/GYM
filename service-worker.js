@@ -1,9 +1,10 @@
-var CACHE_NAME = 'fitforge-v3';
+var CACHE_NAME = 'fitforge-v4';
 var ASSETS = [
   './',
   './index.html',
   './three.min.js',
   './char3d.js',
+  './body.bin',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',

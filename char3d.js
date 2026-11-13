@@ -17,7 +17,7 @@
   var PI = Math.PI;
 
   /* ---------- body dimensions (metres) ---------- */
-  var SH_X = 0.21, SH_Y = 0.50, HIP_X = 0.09, HIP_DROP = 0.04;
+  var SH_X = 0.205, SH_Y = 0.50, HIP_X = 0.095, HIP_DROP = 0.04, ARM_ABD = 0.45;
   var L_UP = 0.33, L_FORE = 0.34, L_THIGH = 0.45, L_SHIN = 0.45;
 
   var COL = {
@@ -129,6 +129,104 @@
       shoe.position.set(0, -0.052, 0.07); shoe.castShadow = true; foot.add(shoe);
       ch.legs.push({ side: s, thigh: thigh, shin: shin, foot: foot });
     });
+    return ch;
+  }
+
+
+  /* ---------- realistic skinned body (sculpted offline, loaded from body.bin) ---------- */
+  var BODY = { geo: null, promise: null, failed: false, muscles: [] };
+  function loadBody(url) {
+    if (BODY.promise) return BODY.promise;
+    BODY.promise = fetch(url).then(function (r) { if (!r.ok) throw new Error('body.bin ' + r.status); return r.arrayBuffer(); }).then(function (buf) {
+      var dv = new DataView(buf), hl = dv.getUint32(0, true);
+      var hdr = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl)));
+      var off = 4 + hl; off += (4 - (off % 4)) % 4;
+      var nV = hdr.nV, nT = hdr.nT;
+      var p16 = new Int16Array(buf, off, nV * 3); off += nV * 6; off += (4 - (off % 4)) % 4;
+      var n8 = new Int8Array(buf, off, nV * 4); off += nV * 4;
+      var si = new Uint8Array(buf, off, nV * 4); off += nV * 4;
+      var sw = new Uint8Array(buf, off, nV * 4); off += nV * 4;
+      var mk = new Uint8Array(buf, off, nV * 16); off += nV * 16;
+      var idx = new Uint32Array(buf, off, nT * 3);
+      var pos = new Float32Array(nV * 3), nor = new Float32Array(nV * 3), sIdx = new Uint16Array(nV * 4), sWt = new Float32Array(nV * 4);
+      var m = [new Uint8Array(nV * 4), new Uint8Array(nV * 4), new Uint8Array(nV * 4), new Uint8Array(nV * 4)];
+      var i, k;
+      for (i = 0; i < nV; i++) {
+        pos[i * 3] = p16[i * 3] * hdr.scale; pos[i * 3 + 1] = p16[i * 3 + 1] * hdr.scale; pos[i * 3 + 2] = p16[i * 3 + 2] * hdr.scale;
+        nor[i * 3] = n8[i * 4] / 127; nor[i * 3 + 1] = n8[i * 4 + 1] / 127; nor[i * 3 + 2] = n8[i * 4 + 2] / 127;
+        for (k = 0; k < 4; k++) { sIdx[i * 4 + k] = si[i * 4 + k]; sWt[i * 4 + k] = sw[i * 4 + k] / 255; }
+        for (k = 0; k < 16; k++) m[k >> 2][i * 4 + (k & 3)] = mk[i * 16 + k];
+      }
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute('skinIndex', new THREE.BufferAttribute(sIdx, 4));
+      geo.setAttribute('skinWeight', new THREE.BufferAttribute(sWt, 4));
+      for (k = 0; k < 4; k++) geo.setAttribute('aM' + k, new THREE.BufferAttribute(m[k], 4, true));
+      geo.setIndex(new THREE.BufferAttribute(idx, 1));
+      geo.userData.shared = true;
+      BODY.geo = geo; BODY.muscles = hdr.muscles;
+      return geo;
+    }).catch(function (e) { BODY.failed = true; throw e; });
+    return BODY.promise;
+  }
+
+  function buildBody(prim, sec) {
+    var ch = { muscles: {}, bodyU: null };
+    var V4 = THREE.Vector4;
+    var uni = { uPA: { value: 0 }, uSA: { value: 0 } };
+    ['uP', 'uS'].forEach(function (nm, j) {
+      var list = j === 0 ? prim : sec;
+      for (var q = 0; q < 4; q++) {
+        var v = new V4(0, 0, 0, 0);
+        for (var c = 0; c < 4; c++) { if (list.indexOf(BODY.muscles[q * 4 + c]) > -1) v.setComponent(c, 1); }
+        uni[nm + q] = { value: v };
+      }
+    });
+    var mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.52, metalness: 0.0 });
+    mat.onBeforeCompile = function (sh) {
+      for (var k in uni) sh.uniforms[k] = uni[k];
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute vec4 aM0; attribute vec4 aM1; attribute vec4 aM2; attribute vec4 aM3;\nuniform vec4 uP0; uniform vec4 uP1; uniform vec4 uP2; uniform vec4 uP3; uniform vec4 uS0; uniform vec4 uS1; uniform vec4 uS2; uniform vec4 uS3; uniform float uPA;\nvarying vec4 vM0; varying vec4 vM1; varying vec4 vM2; varying vec4 vM3; varying float vP; varying float vS;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvM0 = aM0; vM1 = aM1; vM2 = aM2; vM3 = aM3;\nvP = clamp(dot(aM0,uP0)+dot(aM1,uP1)+dot(aM2,uP2)+dot(aM3,uP3), 0.0, 1.0);\nvS = clamp(dot(aM0,uS0)+dot(aM1,uS1)+dot(aM2,uS2)+dot(aM3,uS3), 0.0, 1.0);\ntransformed += normalize(normal) * (vP * uPA * 0.008);');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uPA; uniform float uSA;\nvarying vec4 vM0; varying vec4 vM1; varying vec4 vM2; varying vec4 vM3; varying float vP; varying float vS;\nfloat ffEdge(vec4 m){ vec4 e = 1.0 - smoothstep(0.0, 0.2, abs(m - 0.5)); return max(max(e.x, e.y), max(e.z, e.w)); }')
+        .replace('#include <color_fragment>', '#include <color_fragment>\n{ float ed = max(max(ffEdge(vM0), ffEdge(vM1)), max(ffEdge(vM2), ffEdge(vM3)));\n  vec3 skin = vec3(0.47, 0.46, 0.45) * (1.0 - 0.34 * ed);\n  vec3 pc = mix(skin, vec3(0.88, 0.05, 0.03) * (1.0 - 0.25 * ed), clamp(vP * 0.95, 0.0, 1.0));\n  pc = mix(pc, vec3(0.22, 0.46, 0.88) * (1.0 - 0.25 * ed), clamp(vS * 0.8, 0.0, 1.0) * (1.0 - vP));\n  diffuseColor.rgb = pc; }')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.10, 0.04) * vP * uPA * 0.85 + vec3(0.10, 0.28, 0.65) * vS * uSA * 0.55;');
+    };
+    mat.customProgramCacheKey = function () { return 'ffbody-v1'; };
+    ch.bodyU = uni;
+
+    var bone = function () { return new THREE.Bone(); };
+    var pelvis = bone(), spine = bone(), head = bone();
+    spine.position.set(0, 0, 0); pelvis.add(spine);
+    head.position.set(0, 0.575, 0); spine.add(head);
+    var bones = [pelvis, spine, head];
+    ch.arms = []; ch.legs = [];
+    var armB = {}, legB = {};
+    [1, -1].forEach(function (s) {
+      var upper = bone(), fore = bone();
+      upper.position.set(s * SH_X, SH_Y, 0); upper.rotation.z = s * ARM_ABD; spine.add(upper);
+      fore.position.set(0, -L_UP, 0); upper.add(fore);
+      armB[s] = [upper, fore]; ch.arms.push({ side: s, upper: upper, fore: fore });
+    });
+    [1, -1].forEach(function (s) {
+      var thigh = bone(), shin = bone(), foot = bone();
+      thigh.position.set(s * HIP_X, -HIP_DROP, 0); pelvis.add(thigh);
+      shin.position.set(0, -L_THIGH, 0); thigh.add(shin);
+      foot.position.set(0, -L_SHIN, 0); shin.add(foot);
+      legB[s] = [thigh, shin, foot]; ch.legs.push({ side: s, thigh: thigh, shin: shin, foot: foot });
+    });
+    // order must match the generator: pelvis, spine, head, upper+, fore+, upper-, fore-, thigh+, shin+, foot+, thigh-, shin-, foot-
+    bones.push(armB[1][0], armB[1][1], armB[-1][0], armB[-1][1], legB[1][0], legB[1][1], legB[1][2], legB[-1][0], legB[-1][1], legB[-1][2]);
+    ch.root = new THREE.Group(); ch.root.add(pelvis);
+    ch.pelvis = pelvis; ch.spine = spine; ch.head = head;
+    var mesh = new THREE.SkinnedMesh(BODY.geo, mat);
+    mesh.frustumCulled = false; mesh.castShadow = true; mesh.receiveShadow = false;
+    ch.root.add(mesh);
+    ch.root.updateMatrixWorld(true);
+    var skel = new THREE.Skeleton(bones);
+    mesh.bind(skel, new M4());
     return ch;
   }
 
@@ -248,7 +346,7 @@
   var FR_A = P({ hand: [0.0, -0.56, 0.10], pole: [0, -1, -0.1] });
   def('front_raise', { scene: 'none', prop: { type: 'dumbbells', axis: 'x' }, A: FR_A, B: Q2(FR_A, { hand: [0.04, 0.05, 0.55], arc: [0.02, -0.09, 0.12] }), peak: 'end', cam: STAND_CAM, phases: ['Raise in front', 'Lower slowly'] });
   var SH_A = P({ hand: [0.06, -0.57, 0], pole: [0, -0.5, -1] });
-  def('shrugs', { scene: 'none', prop: { type: 'dumbbells', axis: 'z' }, A: SH_A, B: Q2(SH_A, { shrug: 0.07 }), peak: 'end', cam: STAND_CAM, phases: ['Shrug up', 'Lower slowly'] });
+  def('shrugs', { scene: 'none', prop: { type: 'dumbbells', axis: 'z' }, A: SH_A, B: Q2(SH_A, { shrug: 0.05 }), peak: 'end', cam: STAND_CAM, phases: ['Shrug up', 'Lower slowly'] });
 
   var IC_A = P({ pelvis: [0, 0.54, -0.05], rootPitch: -0.52, hand: [0.06, -0.55, 0.0], pole: [0, -1, -0.3], feet: [0.18, 0.09, 0.38], kneePole: [0.1, 1, 0.3] });
   def('incline_dumbbell_curl', { scene: 'incline', incline: 0.52, prop: { type: 'dumbbells', axis: 'x' }, A: IC_A, B: Q2(IC_A, { hand: [0.02, -0.04, 0.22], arc: [0, 0.0, 0.14] }), peak: 'end', cam: { t: [0, 0.85, -0.1], d: 4.0 }, phases: ['Curl up', 'Lower to full stretch'] });
@@ -264,6 +362,9 @@
 
   var PL_A = P({ pelvis: [0, 0.34, 0], rootPitch: PI / 2 - 0.05, mode: 'world', hand: [0.20, 0.06, 0.83], pole: [0, -0.3, -1], feet: [0.09, 0.20, -0.90], kneePole: [0, 1, 0.3], plantar: 1.0 });
   def('plank', { scene: 'none', prop: { type: 'none' }, A: PL_A, B: PL_A, peak: 'both', still: true, cam: { t: [0, 0.4, -0.1], d: 3.9 }, phases: ['Hold the line', 'Hold the line'] });
+
+  ['bench_press', 'incline_press', 'chest_fly', 'skull_crushers', 'leg_press', 'incline_dumbbell_curl'].forEach(function (k) { MOTIONS[k].head = 1; });
+  MOTIONS.leg_curl.head = 0.35; MOTIONS.plank.head = 0.45; MOTIONS.cable_crunch.head = 0.8;
 
   /* ---------- scene helpers ---------- */
   function box(w, h, d, color, x, y, z, parent, metal) {
@@ -441,7 +542,7 @@
     ring.rotation.x = -PI / 2; ring.position.y = 0.002; scene.add(ring);
 
     var prim = opts.primary || [], sec = opts.secondary || [];
-    var ch = buildCharacter(prim, sec); scene.add(ch.root);
+    var ch = null;
     var sceneGroup = buildScene(motion); scene.add(sceneGroup);
     var prop = makeProp(motion, scene);
     var fades = [];
@@ -480,7 +581,7 @@
 
     var A = motion.A, B = motion.B;
     var tempo = motion.tempo || [1.35, 1.5];
-    var st = { te: 0, time: 0, slow: false, paused: false, rep: 1, phaseT: 0, seg: 0, lastPhase: '', raf: 0, last: 0, manual: false, totalReps: opts.reps || 10, dead: false };
+    var st = { ready: false, te: 0, time: 0, slow: false, paused: false, rep: 1, phaseT: 0, seg: 0, lastPhase: '', raf: 0, last: 0, manual: false, totalReps: opts.reps || 10, dead: false };
 
     var v1 = new V3(), v2 = new V3();
     function resolveHand(side, te) {
@@ -503,6 +604,11 @@
       var sh = lerp(a.shrug, b.shrug, te);
       ch.arms[0].upper.position.y = SH_Y + sh; ch.arms[1].upper.position.y = SH_Y + sh;
       ch.root.updateMatrixWorld(true);
+      if (ch.head) {
+        var sq = new Q(); ch.spine.getWorldQuaternion(sq);
+        var hf = motion.head !== undefined ? motion.head : 0.5;
+        setWorldQuat(ch.head, new Q().slerp(sq, hf));
+      }
 
       var handsW = [];
       // arms
@@ -547,12 +653,17 @@
       // muscle activation
       var act = motion.peak === 'both' ? 1 : (motion.peak === 'start' ? 1 - te : te);
       var pulse = 0.5 + 0.5 * Math.sin(st.time * 6);
-      ch.M.prim.emissiveIntensity = 0.55 + 1.0 * act + 0.18 * pulse;
-      ch.M.glow.opacity = 0.14 + 0.30 * act + 0.06 * pulse;
-      ch.M.sec.emissiveIntensity = 0.15 + 0.35 * act;
-      for (var k in ch.muscles) ch.muscles[k].forEach(function (rec) {
-        if (rec.primary) rec.mesh.scale.copy(rec.base).multiplyScalar(1 + 0.09 * act);
-      });
+      if (ch.bodyU) {
+        ch.bodyU.uPA.value = 0.35 + 0.65 * act + 0.14 * pulse;
+        ch.bodyU.uSA.value = 0.3 + 0.7 * act;
+      } else {
+        ch.M.prim.emissiveIntensity = 0.55 + 1.0 * act + 0.18 * pulse;
+        ch.M.glow.opacity = 0.14 + 0.30 * act + 0.06 * pulse;
+        ch.M.sec.emissiveIntensity = 0.15 + 0.35 * act;
+        for (var k in ch.muscles) ch.muscles[k].forEach(function (rec) {
+          if (rec.primary) rec.mesh.scale.copy(rec.base).multiplyScalar(1 + 0.09 * act);
+        });
+      }
     }
 
     /* timeline: holdA, A->B, holdB, B->A */
@@ -578,12 +689,21 @@
       if (!st.paused && !st.manual) { st.time += dt; timeline(dt); }
       if (cam.auto && !drag.on) cam.tYaw += dt * 0.18;
       var dy = cam.tYaw - cam.yaw; cam.yaw += dy * Math.min(1, dt * 6);
-      pose(st.te);
+      if (st.ready) pose(st.te);
       placeCamera();
       updateFades(dt);
       renderer.render(scene, camera);
       st.raf = requestAnimationFrame(frame);
     }
+
+    function setup() {
+      if (st.dead || ch) return;
+      ch = (BODY.geo && !opts.mannequin) ? buildBody(prim, sec) : buildCharacter(prim, sec);
+      scene.add(ch.root); st.ready = true;
+      if (opts.onReady) opts.onReady(!!ch.bodyU);
+    }
+    if (BODY.geo || BODY.failed || opts.mannequin || !BODY.promise) setup();
+    else BODY.promise.then(setup, setup);
 
     /* interaction */
     var drag = { on: false, x: 0 };
@@ -614,7 +734,7 @@
       destroy: function () {
         st.dead = true; cancelAnimationFrame(st.raf);
         if (ro) ro.disconnect(); else global.removeEventListener('resize', onResize);
-        scene.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
+        scene.traverse(function (o) { if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose(); });
         renderer.dispose(); try { renderer.forceContextLoss(); } catch (e) { }
         if (el.parentNode) el.parentNode.removeChild(el);
       },
@@ -629,5 +749,5 @@
     return api;
   }
 
-  global.FF3D = { supported: supported, create: create, MOTIONS: MOTIONS, hasMotion: function (id) { return !!MOTIONS[id]; } };
+  global.FF3D = { supported: supported, loadBody: loadBody, bodyReady: function () { return BODY.promise || Promise.resolve(); }, create: create, MOTIONS: MOTIONS, hasMotion: function (id) { return !!MOTIONS[id]; } };
 })(window);

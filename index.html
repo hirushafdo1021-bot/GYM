@@ -450,6 +450,7 @@ function render3D(ex, kb){
   h += '<div style="font-size:13px; color:var(--steel); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:8px;">Body posture &amp; target muscles</div>';
   h += '<div style="position:relative; border-radius:14px; overflow:hidden; background:radial-gradient(ellipse at 50% 35%, #2a303a 0%, #14171c 70%); box-shadow:0 0 0 1px var(--line);">';
   h += '<div id="ff3d-stage" style="width:100%; aspect-ratio:3/4; max-height:560px;"></div>';
+  h += '<div id="ff3d-loading" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--steel); font-size:13px; pointer-events:none;">Loading 3D model\u2026</div>';
   h += '<div style="position:absolute; top:10px; left:10px; background:rgba(13,15,18,0.78); color:#F5F3EE; font-size:10px; font-weight:700; letter-spacing:0.7px; padding:5px 10px; border-radius:20px;">'+esc(group)+' WORKOUT</div>';
   h += '<div id="ff3d-rep" style="position:absolute; top:10px; right:10px; background:rgba(13,15,18,0.78); color:#F5F3EE; font-size:10px; font-weight:700; padding:5px 10px; border-radius:20px;"></div>';
   h += '<div style="position:absolute; left:0; right:0; bottom:0; padding:30px 14px 12px; background:linear-gradient(transparent, rgba(10,11,13,0.92) 55%); text-align:center; pointer-events:none;">';
@@ -486,7 +487,8 @@ function mount3D(){
   var v = FF3D.create(stage, {
     exerciseId: ex.id, primary: kb.primary, secondary: kb.secondary, reps: reps, auto: state.v3.auto, yaw: 0.85,
     onRep: function(n){ if(!motion.still) repEl.textContent = 'REP '+n+' / '+reps; },
-    onPhase: function(label){ phEl.textContent = label.toUpperCase(); }
+    onPhase: function(label){ phEl.textContent = label.toUpperCase(); },
+    onReady: function(){ var l = root.querySelector('#ff3d-loading'); if(l) l.style.display = 'none'; }
   });
   if(!v){ stage.parentNode.parentNode.innerHTML = renderMuscleDiagram(kb); return; }
   v.setSlow(state.v3.slow); v.setPaused(state.v3.paused);
@@ -691,6 +693,8 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('service-worker.js').catch(function(){});
   });
 }
+
+if(window.FF3D && FF3D.loadBody){ FF3D.loadBody('body.bin').catch(function(){}); }
 
 (async function init(){
   root.innerHTML = '<div style="padding:40px; text-align:center; color:var(--steel);">Loading\u2026</div>';
