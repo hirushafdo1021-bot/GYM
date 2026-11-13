@@ -1,7 +1,9 @@
-var CACHE_NAME = 'fitforge-v1';
+var CACHE_NAME = 'fitforge-v3';
 var ASSETS = [
   './',
   './index.html',
+  './three.min.js',
+  './char3d.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -24,16 +26,18 @@ self.addEventListener('activate', function(event){
   self.clients.claim();
 });
 
+// Network-first: always pick up new versions when online, fall back to the cache when offline.
 self.addEventListener('fetch', function(event){
+  if(event.request.method !== 'GET') return;
   event.respondWith(
-    caches.match(event.request).then(function(cached){
-      return cached || fetch(event.request).then(function(resp){
-        if(resp && resp.status===200 && event.request.method==='GET'){
-          var clone = resp.clone();
-          caches.open(CACHE_NAME).then(function(cache){ cache.put(event.request, clone); });
-        }
-        return resp;
-      }).catch(function(){ return cached; });
+    fetch(event.request).then(function(resp){
+      if(resp && resp.status === 200 && resp.type === 'basic'){
+        var clone = resp.clone();
+        caches.open(CACHE_NAME).then(function(cache){ cache.put(event.request, clone); });
+      }
+      return resp;
+    }).catch(function(){
+      return caches.match(event.request).then(function(cached){ return cached || caches.match('./index.html'); });
     })
   );
 });

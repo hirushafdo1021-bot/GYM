@@ -50,6 +50,8 @@ html,body{margin:0; padding:0; background:#0D0F12; min-height:100%;}
 <body>
 <div id="ff-root"></div>
 
+<script src="three.min.js"></script>
+<script src="char3d.js"></script>
 <script>
 (function(){
 var root = document.getElementById('ff-root');
@@ -115,7 +117,7 @@ var MOTIVATION = {
   missed:['One missed session doesn\u2019t erase the ones before it. Back on the plan today.','No guilt, just the next set. Get back to it.','Streaks reset, habits don\u2019t. Show up today.']
 };
 
-var state = {tab:'dashboard', dayId:null, exId:null, muscleView:'front', coachLog:[], installDismissed:false};
+var state = {tab:'dashboard', dayId:null, exId:null, muscleView:'front', coachLog:[], installDismissed:false, viewer3d:null, v3:{auto:true, slow:false, paused:false, view:'three'}};
 var deferredInstallPrompt = null;
 
 function todayId(){
@@ -187,6 +189,7 @@ function parseSetCount(scheme){
 }
 
 function render(){
+  if(state.viewer3d){ try{ state.viewer3d.destroy(); }catch(e){} state.viewer3d = null; }
   var h = '';
   h += renderHeader();
   h += '<div class="scroll" style="padding:16px;">';
@@ -201,6 +204,7 @@ function render(){
   h += renderNav();
   root.innerHTML = h;
   attachHandlers();
+  if(state.tab==='exercise') mount3D();
 }
 
 function renderHeader(){
@@ -354,7 +358,7 @@ function renderExercise(){
   h += '<div class="disp" style="font-size:26px;">'+esc(ex.name)+'</div>';
   h += '<div class="mono" style="font-size:15px; color:var(--ember); margin-bottom:12px;">'+esc(ex.scheme)+'</div>';
 
-  h += renderMuscleDiagram(kb);
+  h += render3D(ex, kb);
 
   h += sectionBlock('Starting position', kb.position);
   h += sectionListBlock('Execution', kb.steps, true);
@@ -435,6 +439,72 @@ function bodySvg(view, kb){
   });
   s += '</svg>';
   return s;
+}
+
+function has3D(id){ return window.FF3D && FF3D.supported() && FF3D.hasMotion(id); }
+
+function render3D(ex, kb){
+  if(!has3D(ex.id)) return renderMuscleDiagram(kb);
+  var group = (MUSCLE_LABEL[kb.primary[0]] || 'Muscle').toUpperCase();
+  var h = '<div style="margin-bottom:14px;">';
+  h += '<div style="font-size:13px; color:var(--steel); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:8px;">Body posture &amp; target muscles</div>';
+  h += '<div style="position:relative; border-radius:14px; overflow:hidden; background:radial-gradient(ellipse at 50% 35%, #2a303a 0%, #14171c 70%); box-shadow:0 0 0 1px var(--line);">';
+  h += '<div id="ff3d-stage" style="width:100%; aspect-ratio:3/4; max-height:560px;"></div>';
+  h += '<div style="position:absolute; top:10px; left:10px; background:rgba(13,15,18,0.78); color:#F5F3EE; font-size:10px; font-weight:700; letter-spacing:0.7px; padding:5px 10px; border-radius:20px;">'+esc(group)+' WORKOUT</div>';
+  h += '<div id="ff3d-rep" style="position:absolute; top:10px; right:10px; background:rgba(13,15,18,0.78); color:#F5F3EE; font-size:10px; font-weight:700; padding:5px 10px; border-radius:20px;"></div>';
+  h += '<div style="position:absolute; left:0; right:0; bottom:0; padding:30px 14px 12px; background:linear-gradient(transparent, rgba(10,11,13,0.92) 55%); text-align:center; pointer-events:none;">';
+  h += '<div id="ff3d-phase" class="disp" style="font-size:22px; color:var(--ember); line-height:1;"></div>';
+  h += '<div style="font-size:13px; font-weight:600; margin-top:3px;">'+esc(ex.name)+' &middot; <span class="mono" style="color:#FF8A5C;">'+esc(ex.scheme)+'</span></div>';
+  h += '</div></div>';
+  h += '<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">';
+  [['front','Front'],['side','Side'],['back','Back'],['three','3/4']].forEach(function(v){
+    h += '<button class="btn" data-act="3d-view" data-view="'+v[0]+'" style="padding:7px 12px; font-size:12px;">'+v[1]+'</button>';
+  });
+  h += '<button class="btn" data-act="3d-auto" id="ff3d-auto" style="padding:7px 12px; font-size:12px;">Rotate</button>';
+  h += '<button class="btn" data-act="3d-slow" id="ff3d-slow" style="padding:7px 12px; font-size:12px;">Slow-mo</button>';
+  h += '<button class="btn" data-act="3d-pause" id="ff3d-pause" style="padding:7px 12px; font-size:12px;">Pause</button>';
+  h += '</div>';
+  h += '<div style="display:flex; flex-direction:column; gap:5px; margin-top:12px; font-size:13px;">';
+  h += '<div><span style="display:inline-block; width:11px; height:11px; border-radius:3px; background:#ff2a1f; box-shadow:0 0 8px #ff2a1f; margin-right:8px; vertical-align:-1px;"></span><b>Working hardest:</b> '+kb.primary.map(function(m){return MUSCLE_LABEL[m];}).join(', ')+'</div>';
+  if(kb.secondary.length) h += '<div><span style="display:inline-block; width:11px; height:11px; border-radius:3px; background:#5e8fd1; margin-right:8px; vertical-align:-1px;"></span><b>Assisting:</b> '+kb.secondary.map(function(m){return MUSCLE_LABEL[m];}).join(', ')+'</div>';
+  h += '</div>';
+  h += '</div>';
+  return h;
+}
+
+function mount3D(){
+  var stage = root.querySelector('#ff3d-stage');
+  if(!stage || !state.exId) return;
+  var ex = state.exId, kb = KB[ex.id];
+  if(!has3D(ex.id)) return;
+  var motion = FF3D.MOTIONS[ex.id];
+  var nums = ex.scheme.match(/\d+/g);
+  var reps = nums? parseInt(nums[nums.length-1],10) : 10;
+  if(!reps || reps>25 || motion.still) reps = 10;
+  var repEl = root.querySelector('#ff3d-rep'), phEl = root.querySelector('#ff3d-phase');
+  repEl.textContent = motion.still? 'HOLD' : 'REP 1 / '+reps;
+  var v = FF3D.create(stage, {
+    exerciseId: ex.id, primary: kb.primary, secondary: kb.secondary, reps: reps, auto: state.v3.auto, yaw: 0.85,
+    onRep: function(n){ if(!motion.still) repEl.textContent = 'REP '+n+' / '+reps; },
+    onPhase: function(label){ phEl.textContent = label.toUpperCase(); }
+  });
+  if(!v){ stage.parentNode.parentNode.innerHTML = renderMuscleDiagram(kb); return; }
+  v.setSlow(state.v3.slow); v.setPaused(state.v3.paused);
+  state.viewer3d = v;
+  refresh3DButtons();
+}
+
+function refresh3DButtons(){
+  [['3d-auto','auto'],['3d-slow','slow'],['3d-pause','paused']].forEach(function(p){
+    var el = root.querySelector('[data-act="'+p[0]+'"]'); if(!el) return;
+    var on = state.v3[p[1]];
+    el.style.borderColor = on? 'var(--ember)' : ''; el.style.color = on? 'var(--ember)' : '';
+  });
+  root.querySelectorAll('[data-act="3d-view"]').forEach(function(el){
+    var on = (!state.v3.auto && state.v3.view===el.getAttribute('data-view'));
+    el.style.borderColor = on? 'var(--ember)' : ''; el.style.color = on? 'var(--ember)' : '';
+  });
+  var pb = root.querySelector('#ff3d-pause'); if(pb) pb.textContent = state.v3.paused? 'Play' : 'Pause';
 }
 
 function renderMuscleDiagram(kb){
@@ -589,9 +659,15 @@ function attachHandlers(){
         if(deferredInstallPrompt){
           deferredInstallPrompt.prompt();
           deferredInstallPrompt.userChoice.then(function(){ deferredInstallPrompt = null; });
+        } else {
+          alert('Chrome hasn\'t offered an install prompt yet.\n\nTry instead: tap the \u22ee menu (top right of Chrome) and choose "Install app" or "Add to Home screen".\n\nIf that option isn\'t there, this page may not be fully loading over HTTPS yet \u2014 check manifest.json, service-worker.js, icon-192.png and icon-512.png all open without a 404.');
         }
       }
       else if(act==='dismiss-install'){ state.installDismissed = true; render(); }
+      else if(act==='3d-view'){ var vw = el.getAttribute('data-view'); state.v3.view = vw; state.v3.auto = false; if(state.viewer3d){ state.viewer3d.setView(vw); state.viewer3d.setAuto(false); } refresh3DButtons(); }
+      else if(act==='3d-auto'){ state.v3.auto = !state.v3.auto; if(state.viewer3d) state.viewer3d.setAuto(state.v3.auto); refresh3DButtons(); }
+      else if(act==='3d-slow'){ state.v3.slow = !state.v3.slow; if(state.viewer3d) state.viewer3d.setSlow(state.v3.slow); refresh3DButtons(); }
+      else if(act==='3d-pause'){ state.v3.paused = !state.v3.paused; if(state.viewer3d) state.viewer3d.setPaused(state.v3.paused); refresh3DButtons(); }
     });
   });
   var search = root.querySelector('#ff-search');
