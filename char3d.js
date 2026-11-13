@@ -23,7 +23,7 @@
   var COL = {
     skin: 0xe6c8aa, idle: 0xd4b496, shorts: 0x2b2f37, shoe: 0x3c4149, hair: 0x2a201b,
     prim: 0xff2a1f, primEm: 0xff1208, sec: 0x5e8fd1, secEm: 0x2a5cb4,
-    pad: 0x23272e, steel: 0x8c939e, plate: 0x1b1d22, plateEdge: 0x3a3e46,
+    pad: 0x16191d, steel: 0x8c939e, plate: 0x1b1d22, plateEdge: 0x3a3e46,
     floor: 0x181b20, ring: 0xff5b2e
   };
 
@@ -183,18 +183,18 @@
         uni[nm + q] = { value: v };
       }
     });
-    var mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.52, metalness: 0.0 });
+    var mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88, metalness: 0.0, envMapIntensity: 0.55 });
     mat.onBeforeCompile = function (sh) {
       for (var k in uni) sh.uniforms[k] = uni[k];
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec4 aM0; attribute vec4 aM1; attribute vec4 aM2; attribute vec4 aM3;\nuniform vec4 uP0; uniform vec4 uP1; uniform vec4 uP2; uniform vec4 uP3; uniform vec4 uS0; uniform vec4 uS1; uniform vec4 uS2; uniform vec4 uS3; uniform float uPA;\nvarying vec4 vM0; varying vec4 vM1; varying vec4 vM2; varying vec4 vM3; varying float vP; varying float vS;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvM0 = aM0; vM1 = aM1; vM2 = aM2; vM3 = aM3;\nvP = clamp(dot(aM0,uP0)+dot(aM1,uP1)+dot(aM2,uP2)+dot(aM3,uP3), 0.0, 1.0);\nvS = clamp(dot(aM0,uS0)+dot(aM1,uS1)+dot(aM2,uS2)+dot(aM3,uS3), 0.0, 1.0);\ntransformed += normalize(normal) * (vP * uPA * 0.008);');
+        .replace('#include <common>', '#include <common>\nattribute vec4 aM0; attribute vec4 aM1; attribute vec4 aM2; attribute vec4 aM3;\nuniform vec4 uP0; uniform vec4 uP1; uniform vec4 uP2; uniform vec4 uP3; uniform vec4 uS0; uniform vec4 uS1; uniform vec4 uS2; uniform vec4 uS3; uniform float uPA;\nvarying vec4 vM0; varying vec4 vM1; varying vec4 vM2; varying vec4 vM3; varying float vP; varying float vS; varying vec3 vBind;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvM0 = aM0; vM1 = aM1; vM2 = aM2; vM3 = aM3; vBind = position;\nvP = clamp(dot(aM0,uP0)+dot(aM1,uP1)+dot(aM2,uP2)+dot(aM3,uP3), 0.0, 1.0);\nvS = clamp(dot(aM0,uS0)+dot(aM1,uS1)+dot(aM2,uS2)+dot(aM3,uS3), 0.0, 1.0);\ntransformed += normalize(normal) * (vP * uPA * 0.008);');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uPA; uniform float uSA;\nvarying vec4 vM0; varying vec4 vM1; varying vec4 vM2; varying vec4 vM3; varying float vP; varying float vS;\nfloat ffEdge(vec4 m){ vec4 e = 1.0 - smoothstep(0.0, 0.2, abs(m - 0.5)); return max(max(e.x, e.y), max(e.z, e.w)); }')
-        .replace('#include <color_fragment>', '#include <color_fragment>\n{ float ed = max(max(ffEdge(vM0), ffEdge(vM1)), max(ffEdge(vM2), ffEdge(vM3)));\n  vec3 skin = vec3(0.47, 0.46, 0.45) * (1.0 - 0.34 * ed);\n  vec3 pc = mix(skin, vec3(0.88, 0.05, 0.03) * (1.0 - 0.25 * ed), clamp(vP * 0.95, 0.0, 1.0));\n  pc = mix(pc, vec3(0.22, 0.46, 0.88) * (1.0 - 0.25 * ed), clamp(vS * 0.8, 0.0, 1.0) * (1.0 - vP));\n  diffuseColor.rgb = pc; }')
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.10, 0.04) * vP * uPA * 0.85 + vec3(0.10, 0.28, 0.65) * vS * uSA * 0.55;');
+        .replace('#include <common>', '#include <common>\nuniform float uPA; uniform float uSA;\nvarying vec4 vM0; varying vec4 vM1; varying vec4 vM2; varying vec4 vM3; varying float vP; varying float vS; varying vec3 vBind;\nfloat ffEdge(vec4 m){ vec4 e = 1.0 - smoothstep(0.0, 0.2, abs(m - 0.5)); return max(max(e.x, e.y), max(e.z, e.w)); }')
+        .replace('#include <color_fragment>', '#include <color_fragment>\n{ float ed = max(max(ffEdge(vM0), ffEdge(vM1)), max(ffEdge(vM2), ffEdge(vM3)));\n  vec3 clay = vec3(0.56, 0.565, 0.575) * (1.0 - 0.22 * ed);\n  float shT = 1.0 - smoothstep(0.062, 0.082, vBind.y); float shB = smoothstep(-0.292, -0.262, vBind.y); float shX = 1.0 - smoothstep(0.20, 0.24, abs(vBind.x));\n  float shorts = shT * shB * shX;\n  vec3 pc = mix(clay, vec3(0.075, 0.08, 0.09), shorts);\n  pc = mix(pc, vec3(1.0, 0.05, 0.04) * (1.0 - 0.15 * ed), clamp(vP * 0.88, 0.0, 1.0));\n  pc = mix(pc, vec3(0.04, 0.38, 1.0) * (1.0 - 0.15 * ed), clamp(vS * 0.8, 0.0, 1.0) * (1.0 - vP));\n  diffuseColor.rgb = pc; }')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nfloat ffFr = pow(1.0 - clamp(abs(dot(normalize(vNormal), normalize(vViewPosition))), 0.0, 1.0), 2.2);\ntotalEmissiveRadiance += vec3(1.0, 0.03, 0.02) * vP * uPA * 1.1 + vec3(0.04, 0.30, 1.0) * vS * uSA * 0.55 + (vec3(1.0, 0.12, 0.06) * vP * uPA + vec3(0.1, 0.4, 1.0) * vS * uSA) * ffFr * 0.55;');
     };
-    mat.customProgramCacheKey = function () { return 'ffbody-v1'; };
+    mat.customProgramCacheKey = function () { return 'ffbody-v2'; };
     ch.bodyU = uni;
 
     var bone = function () { return new THREE.Bone(); };
@@ -282,8 +282,8 @@
   var STAND_CAM = { t: [0, 0.92, 0], d: 4.4 };
 
   /* flat bench */
-  var BENCH_A = P({ pelvis: [0, 0.58, 0.15], rootPitch: -PI / 2, feet: [0.30, 0.09, 0.62], kneePole: [0.2, 1, 0.4], hand: [0.09, 0.14, 0.12], pole: [0.8, -0.6, 0] });
-  def('bench_press', { scene: 'bench', prop: { type: 'barbell' }, A: BENCH_A, B: Q2(BENCH_A, { hand: [0.09, 0.58, 0.04], pole: [0.4, -0.6, 0.2] }), peak: 'end', cam: { t: [0, 0.8, -0.1], d: 3.7 }, phases: ['Press up', 'Lower to chest'] });
+  var BENCH_A = P({ pelvis: [0, 0.58, 0.15], rootPitch: -PI / 2, spinePitch: -0.07, feet: [0.22, 0.09, 0.60], kneePole: [0.1, 1, 0.4], hand: [0.09, 0.14, 0.12], pole: [0.8, -0.6, 0] });
+  def('bench_press', { scene: 'bench', prop: { type: 'barbell' }, A: BENCH_A, B: Q2(BENCH_A, { hand: [0.09, 0.58, 0.04], pole: [0.4, -0.6, 0.2] }), peak: 'end', cam: { t: [0, 0.68, -0.12], d: 3.7 }, phases: ['Press up', 'Lower to chest'] });
 
   var INC_A = P({ pelvis: [0, 0.57, 0.05], rootPitch: -0.96, feet: [0.30, 0.09, 0.55], kneePole: [0.2, 1, 0.3], hand: [0.09, 0.10, 0.19], pole: [0.8, -0.5, -0.3] });
   def('incline_press', { scene: 'incline', incline: 0.96, prop: { type: 'dumbbells', axis: 'x' }, A: INC_A, B: Q2(INC_A, { hand: [0.08, 0.56, 0.14], pole: [0.5, -0.5, -0.2] }), peak: 'end', cam: { t: [0, 0.85, -0.1], d: 3.7 }, phases: ['Press up', 'Lower with control'] });
@@ -514,6 +514,27 @@
     }
   }
 
+  function studioEnv(renderer) {
+    var pm = new THREE.PMREMGenerator(renderer);
+    var es = new THREE.Scene();
+    var sky = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true }));
+    var pos = sky.geometry.attributes.position, cols = [];
+    for (var i = 0; i < pos.count; i++) { var y = pos.getY(i) / 10, v = 0.05 + 0.22 * (y * 0.5 + 0.5); cols.push(v, v, v * 1.06); }
+    sky.geometry.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); es.add(sky);
+    [[0, 6, 4, 8, 5, 0xffffff, 9], [-7, 3, -3, 3, 6, 0xa9c4ff, 5], [7, 2, 2, 2, 5, 0xffffff, 3]].forEach(function (b) {
+      var m = new THREE.Mesh(new THREE.PlaneGeometry(b[3], b[4]), new THREE.MeshBasicMaterial({ color: new THREE.Color(b[5]).multiplyScalar(b[6]), side: THREE.DoubleSide }));
+      m.position.set(b[0], b[1], b[2]); m.lookAt(0, 0, 0); es.add(m);
+    });
+    var tex = pm.fromScene(es, 0.03).texture; pm.dispose(); return tex;
+  }
+  function studioBackdrop() {
+    var cv = document.createElement('canvas'); cv.width = 256; cv.height = 512;
+    var g = cv.getContext('2d'), gr = g.createRadialGradient(128, 200, 20, 128, 260, 360);
+    gr.addColorStop(0, '#2c313a'); gr.addColorStop(0.55, '#1a1d23'); gr.addColorStop(1, '#0e1013');
+    g.fillStyle = gr; g.fillRect(0, 0, 256, 512);
+    return new THREE.CanvasTexture(cv);
+  }
+
   /* ---------- viewer ---------- */
   function create(container, opts) {
     var motion = MOTIONS[opts.exerciseId];
@@ -528,18 +549,25 @@
     container.appendChild(renderer.domElement);
 
     var scene = new THREE.Scene();
+    scene.background = studioBackdrop();
+    
+    renderer.toneMapping = THREE.NoToneMapping;
+    try { scene.environment = studioEnv(renderer); } catch (e) { }
     var camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 50);
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x3a4050, 0.95));
-    var key = new THREE.DirectionalLight(0xffffff, 0.95); key.position.set(2.5, 5, 3.5); key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024); key.shadow.camera.left = -3; key.shadow.camera.right = 3; key.shadow.camera.top = 3.5; key.shadow.camera.bottom = -2; key.shadow.camera.near = 1; key.shadow.camera.far = 14; key.shadow.bias = -0.0008;
+    scene.add(new THREE.HemisphereLight(0xdfe6f2, 0x2b2f38, 0.55));
+    var key = new THREE.DirectionalLight(0xfff4e8, 1.0); key.position.set(2.5, 5, 3.5); key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -3; key.shadow.camera.right = 3; key.shadow.camera.top = 3.5; key.shadow.camera.bottom = -2; key.shadow.camera.near = 1; key.shadow.camera.far = 14; key.shadow.bias = -0.0008;
     scene.add(key);
-    var rim = new THREE.DirectionalLight(0x8fb0ff, 0.45); rim.position.set(-3, 2.5, -3); scene.add(rim);
+    var rim = new THREE.DirectionalLight(0x9db8ff, 0.8); rim.position.set(-3, 2.5, -3); scene.add(rim);
 
-    var floor = new THREE.Mesh(new THREE.CircleGeometry(2.2, 64), new THREE.MeshStandardMaterial({ color: COL.floor, roughness: 0.9 }));
+    var fcv = document.createElement('canvas'); fcv.width = fcv.height = 256;
+    var fg = fcv.getContext('2d'), fgr = fg.createRadialGradient(128, 128, 20, 128, 128, 128);
+    fgr.addColorStop(0, '#fff'); fgr.addColorStop(0.55, '#bbb'); fgr.addColorStop(1, '#000'); fg.fillStyle = fgr; fg.fillRect(0, 0, 256, 256);
+    var floor = new THREE.Mesh(new THREE.CircleGeometry(4.6, 64), new THREE.MeshStandardMaterial({ color: 0x23272e, roughness: 0.95, envMapIntensity: 0.25, transparent: true, alphaMap: new THREE.CanvasTexture(fcv) }));
     floor.rotation.x = -PI / 2; floor.receiveShadow = true; scene.add(floor);
     var ring = new THREE.Mesh(new THREE.RingGeometry(2.15, 2.2, 64), new THREE.MeshBasicMaterial({ color: COL.ring, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
-    ring.rotation.x = -PI / 2; ring.position.y = 0.002; scene.add(ring);
+    ring.visible = false;
 
     var prim = opts.primary || [], sec = opts.secondary || [];
     var ch = null;
@@ -560,6 +588,7 @@
     collectFades();
     var _fp = new V3(), _ray = new V3(), _c = new V3();
     function updateFades(dt) {
+      if (opts.noFade) return;
       _ray.copy(target).sub(camera.position); var rl = _ray.length(); _ray.divideScalar(rl);
       fades.forEach(function (f) {
         f.m.getWorldPosition(_fp); _c.copy(_fp).sub(camera.position);
@@ -570,7 +599,7 @@
     }
 
     /* camera orbit state */
-    var cam = { yaw: opts.yaw !== undefined ? opts.yaw : 0.85, pitch: 0.16, dist: motion.cam.d * Math.max(1, Math.pow(h / w, 0.55)) * 1.02, tYaw: null, auto: opts.auto !== false };
+    var cam = { yaw: opts.yaw !== undefined ? opts.yaw : 0.85, pitch: 0.16, dist: motion.cam.d * Math.max(1, Math.pow(h / w, 0.55)) * 1.02 * (opts.distScale || 1), tYaw: null, auto: opts.auto !== false };
     cam.tYaw = cam.yaw;
     var target = new V3(motion.cam.t[0], motion.cam.t[1], motion.cam.t[2]);
     function placeCamera() {
